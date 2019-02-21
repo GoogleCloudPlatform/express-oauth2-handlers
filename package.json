@@ -1,0 +1,28 @@
+{
+  "name": "express-oauth",
+  "version": "0.0.1",
+  "description": "A package that simplifies working with OAuth 2.0 tokens and ExpressJS on GCP",
+  "main": "index.js",
+  "scripts": {
+    "lint": "eslint *.js test/*.js",
+    "test": "npm run lint && ava test/*.test.js"
+  },
+  "author": "Ace Nassri (anassri@google.com)",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@google-cloud/datastore": "^3.1.0",
+    "cookie": "^0.3.1",
+    "google-auth-library": "^3.1.0",
+    "nconf": "^0.10.0"
+  },
+  "devDependencies": {
+    "ava": "^1.2.1",
+    "eslint": "^5.14.1",
+    "eslint-config-prettier": "^4.0.0",
+    "eslint-plugin-node": "^8.0.1",
+    "eslint-plugin-prettier": "^3.0.1",
+    "proxyquire": "^2.1.0",
+    "sinon": "^7.2.3",
+    "uuid": "^3.3.2"
+  }
+}
