@@ -19,6 +19,14 @@ const proxyquire = require(`proxyquire`)
   .noPreserveCache()
   .noCallThru();
 
+// Hide output
+test.before(() => {
+  sinon.stub(console, 'log');
+});
+test.after.always(() => {
+  console.log.restore();
+});
+
 function getSample(defaultScopes) {
   defaultScopes = defaultScopes || [];
 
@@ -28,8 +36,8 @@ function getSample(defaultScopes) {
   };
 
   const tokenStorageMock = {
-    saveToken: sinon.stub().resolves(),
-    client: authClientMock,
+    storeToken: sinon.stub().resolves(),
+    __client: authClientMock,
   };
 
   const reqMock = {
@@ -106,8 +114,8 @@ test('cb: should accept GCF args (req, res)', async t => {
   const handler = sample.program.cb;
   await handler(reqMock, resMock);
 
-  t.true(tokenStorageMock.client.getToken.calledOnce);
-  t.true(tokenStorageMock.saveToken.calledOnce);
+  t.true(tokenStorageMock.__client.getToken.calledOnce);
+  t.true(tokenStorageMock.storeToken.calledOnce);
 
   t.true(resMock.status.calledWith(200));
   t.true(resMock.send.calledOnce);
@@ -124,8 +132,8 @@ test('cb: should accept middleware args (req, res, next)', async t => {
   const handler = sample.program.cb;
   await handler(reqMock, resMock, nextMock);
 
-  t.true(tokenStorageMock.client.getToken.calledOnce);
-  t.true(tokenStorageMock.saveToken.calledOnce);
+  t.true(tokenStorageMock.__client.getToken.calledOnce);
+  t.true(tokenStorageMock.storeToken.calledOnce);
   t.true(nextMock.calledOnce);
 });
 
@@ -150,7 +158,7 @@ test('cb: should handle success with callback function', async t => {
 
 test('cb: should handle error with callback function', async t => {
   const sample = getSample();
-  sample.mocks.tokenStorage.saveToken = sinon.stub().rejects();
+  sample.mocks.tokenStorage.storeToken = sinon.stub().rejects();
 
   const onSuccess = sinon.stub();
   const onFailure = sinon.stub();
@@ -179,7 +187,7 @@ test('cb: should handle success with string redirect', async t => {
 
 test('cb: should handle error with string redirect', async t => {
   const sample = getSample();
-  sample.mocks.tokenStorage.saveToken = sinon.stub().rejects();
+  sample.mocks.tokenStorage.storeToken = sinon.stub().rejects();
 
   const reqMock = sample.mocks.req;
   const resMock = sample.mocks.res;
@@ -200,7 +208,7 @@ test('should respect DEFAULT_SCOPES setting', async t => {
   const handler = sample.program.init;
   await handler(reqMock, resMock);
 
-  const authFunc = sample.mocks.tokenStorage.client.generateAuthUrl;
+  const authFunc = sample.mocks.tokenStorage.__client.generateAuthUrl;
   t.true(authFunc.calledOnce);
   t.deepEqual(authFunc.firstCall.args[0].scope, ['scope_a']);
 });
@@ -214,7 +222,7 @@ test('local scopes should override DEFAULT_SCOPES setting', async t => {
   const handler = sample.program.init(['scope_b']);
   await handler(reqMock, resMock);
 
-  const authFunc = sample.mocks.tokenStorage.client.generateAuthUrl;
+  const authFunc = sample.mocks.tokenStorage.__client.generateAuthUrl;
   t.true(authFunc.calledOnce);
   t.deepEqual(authFunc.firstCall.args[0].scope, ['scope_b']);
 });

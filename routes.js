@@ -22,7 +22,7 @@ const __isExpressCall = (arg1, arg2) =>
 exports.init = (arg1, arg2, arg3) => {
   const handler = (req, res, scopes, next) => {
     res.redirect(
-      tokenStorage.client.generateAuthUrl({
+      tokenStorage.__client.generateAuthUrl({
         access_type: 'offline',
         scope: scopes,
         prompt: 'consent', // Needed so we receive a refresh token every time
@@ -50,7 +50,7 @@ exports.cb = (arg1, arg2, arg3) => {
 
     // OAuth2: Exchange authorization code for access token
     return new Promise((resolve, reject) => {
-      tokenStorage.client.getToken(code, (err, token) => {
+      tokenStorage.__client.getToken(code, (err, token) => {
         if (err) {
           return reject(err);
         }
@@ -59,7 +59,7 @@ exports.cb = (arg1, arg2, arg3) => {
     })
       .then(token => {
         // Store token
-        return tokenStorage.saveToken(req, res, token);
+        return tokenStorage.storeToken(req, res, token);
       })
       .then(() => {
         // Custom actions
@@ -79,6 +79,8 @@ exports.cb = (arg1, arg2, arg3) => {
         }
       })
       .catch(err => {
+        console.log(err);
+
         if (isFuncOrStr(onFailure)) {
           if (typeof onFailure === 'function') {
             onFailure(err, req, res);
@@ -86,7 +88,6 @@ exports.cb = (arg1, arg2, arg3) => {
             res.redirect(onFailure);
           }
         } else {
-          console.log(err);
           res.status(500).send('Something went wrong, check the logs.');
         }
 

@@ -14,6 +14,8 @@
  */
 
 const test = require('ava');
+const sinon = require('sinon');
+const proxyquire = require('proxyquire').noPreserveCache();
 
 test.beforeEach(() => {
   delete require.cache[require.resolve('../config')];
@@ -37,4 +39,27 @@ test.serial('should check for required env vars', t => {
   t.throws(() => {
     require('../config');
   }, /GOOGLE_CALLBACK_URL/);
+});
+
+test.serial('should automatically load a client_secret.json file', t => {
+  const fileContents = JSON.stringify({
+    web: {
+      client_id: 'foo',
+      client_secret: 'bar',
+      redirect_uris: ['https://google.com'],
+    },
+  });
+
+  delete process.env.GOOGLE_CLIENT_ID;
+  delete process.env.GOOGLE_CLIENT_SECRET;
+  delete process.env.GOOGLE_CALLBACK_URL;
+
+  t.notThrows(() => {
+    proxyquire('../config', {
+      fs: {
+        existsSync: sinon.stub().returns(true),
+        readFileSync: sinon.stub().returns(fileContents),
+      },
+    });
+  });
 });

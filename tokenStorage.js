@@ -100,3 +100,6 @@ exports.getToken = (req, res, userId) => {
     return Promise.resolve(oauth2client.credentials);
   });
 };
+
+/* Internal use only (routes.cb requires access to the uninitialized client) */
+exports.__client = oauth2client;

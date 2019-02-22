@@ -8,15 +8,18 @@ npm install @google-cloud/express-oauth2-handlers
 ```
 
 ## Configuration
-In order to use the library, several variables must be set. These values can be stored in either:
-- Linux environment variables
-- a `client_secret.json` file in the root directory of your function/app 
+In order to use the library, several variables must be set. These values can be stored as Linux environment variables.
+
+If a web application client secret file named `client_secret.json` is present in the root directory of your function/app, the required values below will be automatically imported.
 
 ##### Required values
 The following values can be obtained by [generating a new OAuth 2.0 client ID](https://console.cloud.google.com/apis/credentials) or reusing an existing one:
 - **`GOOGLE_CLIENT_ID`**
 - **`GOOGLE_CLIENT_SECRET`**
 - **`GOOGLE_CALLBACK_URL`**
+
+**Note**
+These values (and in particular the `GOOGLE_CLIENT_SECRET` value) should not be stored/committed alongside your codebase. As such, this library does _not_ support specifying these values programmatically.
 
 ##### Optional values
 These values can be specified during either the configuration or [initialization](#initialization) processes. Where values are different between the two, those specified during initialization take precedence.

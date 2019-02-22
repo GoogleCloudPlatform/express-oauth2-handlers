@@ -16,18 +16,34 @@
 const nconf = require('nconf');
 const path = require('path');
 
-const configPath = path.join(
-  path.dirname(require.main.filename),
-  'client_secret.json'
-);
-
+/* Standard configuration logic */
 nconf
+  .use('memory')
   .env()
-  .file(configPath)
   .defaults({
     TOKEN_STORAGE_METHOD: 'cookie',
     DEFAULT_SCOPES: '',
   });
+
+/* Automatic secret discovery */
+const secretPath = path.join(path.dirname(__dirname), 'client_secret.json');
+const fs = require('fs');
+if (fs.existsSync(secretPath)) {
+  const contents = JSON.parse(fs.readFileSync(secretPath))['web'];
+  if (contents && contents['client_id']) {
+    nconf.set('GOOGLE_CLIENT_ID', contents['client_id']);
+  }
+  if (contents && contents['client_secret']) {
+    nconf.set('GOOGLE_CLIENT_SECRET', contents['client_secret']);
+  }
+  if (
+    contents &&
+    contents['redirect_uris'] &&
+    contents['redirect_uris'].length === 1
+  ) {
+    nconf.set('GOOGLE_CALLBACK_URL', contents['redirect_uris'][0]);
+  }
+}
 
 nconf.required([
   'GOOGLE_CLIENT_ID',
