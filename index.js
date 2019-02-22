@@ -16,10 +16,10 @@
 let routes;
 let tokenStorage;
 
-module.exports = (scopes, storage_method, include_internal_methods) => {
+module.exports = (storage_method, scopes, include_internal_methods) => {
   // Set global config env vars
   process.env.DEFAULT_SCOPES = (scopes || []).join(',');
-  process.env.TOKEN_STORAGE_METHOD = storage_method;
+  process.env.TOKEN_STORAGE_METHOD = storage_method || 'cookie';
 
   // Import libraries (AFTER setting env vars)
   routes = require('./routes');
@@ -28,8 +28,7 @@ module.exports = (scopes, storage_method, include_internal_methods) => {
   // Export library methods
   let exported = {
     auth: {
-      client: tokenStorage.client,
-      token: null,
+      getClient: tokenStorage.getAuth,
     },
     routes: {
       init: routes.init,
@@ -40,8 +39,8 @@ module.exports = (scopes, storage_method, include_internal_methods) => {
   // Export internal methods (if asked to, in case someone needs these)
   if (include_internal_methods) {
     exported.__internal = {
-      __saveToken: tokenStorage.saveToken,
-      __getAuth: tokenStorage.getAuth,
+      __storeToken: tokenStorage.storeToken,
+      __getToken: tokenStorage.getToken,
     };
   }
 

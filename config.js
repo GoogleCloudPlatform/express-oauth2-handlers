@@ -14,10 +14,16 @@
  */
 
 const nconf = require('nconf');
+const path = require('path');
+
+const configPath = path.join(
+  path.dirname(require.main.filename),
+  'client_secret.json'
+);
 
 nconf
   .env()
-  .file('client_secret.json')
+  .file(configPath)
   .defaults({
     TOKEN_STORAGE_METHOD: 'cookie',
     DEFAULT_SCOPES: '',

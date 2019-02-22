@@ -71,7 +71,7 @@ function getSample(storageMethod, datastoreResult, cookieResult, expiryDate) {
 const test = require('ava');
 
 /* Basic tests */
-test('should save token using cookies', t => {
+test('should store token using cookies', t => {
   const sample = getSample('cookie');
 
   const reqMock = sample.mocks.req;
@@ -81,7 +81,7 @@ test('should save token using cookies', t => {
   const token = uuid4();
   const userId = uuid4();
 
-  sample.program.saveToken(reqMock, resMock, token, userId);
+  sample.program.storeToken(reqMock, resMock, token, userId);
 
   t.true(resMock.cookie.calledOnce);
   t.true(datastoreMock.save.notCalled);
@@ -91,7 +91,7 @@ test('should save token using cookies', t => {
   ]);
 });
 
-test('should save token using datastore', t => {
+test('should store token using datastore', t => {
   const sample = getSample('datastore');
 
   const reqMock = sample.mocks.req;
@@ -101,7 +101,7 @@ test('should save token using datastore', t => {
   const token = uuid4();
   const userId = uuid4();
 
-  sample.program.saveToken(reqMock, resMock, token, userId);
+  sample.program.storeToken(reqMock, resMock, token, userId);
 
   t.true(resMock.cookie.notCalled);
   t.true(datastoreMock.save.calledOnce);
@@ -164,7 +164,7 @@ test('should validate storage method', async t => {
   const resMock = sample.mocks.res;
 
   await t.throwsAsync(async () => {
-    await program.saveToken(reqMock, resMock);
+    await program.storeToken(reqMock, resMock);
   }, 'error_storage_type');
 });
 
@@ -179,7 +179,7 @@ test('should require userid for datastore', async t => {
     await program.getAuth(reqMock, resMock);
   }, 'error_needs_userid');
   await t.throwsAsync(async () => {
-    await program.saveToken(reqMock, resMock);
+    await program.storeToken(reqMock, resMock);
   }, 'error_needs_userid');
 });
 

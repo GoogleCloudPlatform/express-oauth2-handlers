@@ -46,13 +46,13 @@ test.serial('sets scopes env var', t => {
   const scope1 = uuid4();
   const scope2 = uuid4();
 
-  program([scope1, scope2]);
+  program(null, [scope1, scope2]);
   t.is(process.env.DEFAULT_SCOPES, `${scope1},${scope2}`);
 });
 
 test.serial('sets storage_method env var', t => {
   const storageMethod = uuid4();
 
-  program([], storageMethod);
+  program(storageMethod, []);
   t.is(process.env.TOKEN_STORAGE_METHOD, storageMethod);
 });

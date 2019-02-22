@@ -39,10 +39,10 @@ const __validateOrRefreshToken = (req, res, token, userId) => {
         if (err) {
           return reject(new Error(err));
         }
-        return resolve();
+        return resolve(oauth2client.credentials);
       });
-    }).then(() => {
-      return exports.saveToken(req, res, userId);
+    }).then(newToken => {
+      return exports.storeToken(req, res, newToken, userId);
     });
   } else {
     oauth2client.credentials = token;
@@ -50,7 +50,7 @@ const __validateOrRefreshToken = (req, res, token, userId) => {
   }
 };
 
-exports.saveToken = (req, res, token, userId) => {
+exports.storeToken = (req, res, token, userId) => {
   if (config.STORAGE_METHOD === 'datastore') {
     // Check for user ID
     if (!userId) {
@@ -95,4 +95,8 @@ exports.getAuth = (req, res, userId) => {
   }
 };
 
-exports.client = oauth2client;
+exports.getToken = (req, res, userId) => {
+  return exports.getAuth(req, res, userId).then(() => {
+    return Promise.resolve(oauth2client.credentials);
+  });
+};
