@@ -21,6 +21,7 @@ test.beforeEach(() => {
   process.env.GOOGLE_CLIENT_ID = 'google_client_id';
   process.env.GOOGLE_CLIENT_SECRET = 'google_client_secret';
   process.env.GOOGLE_CALLBACK_URL = 'google_callback_url';
+  process.env.USER_ID_FORMAT = 'gaiaId';
 });
 
 test.afterEach.always(() => {
@@ -34,12 +35,12 @@ test.serial('works without provided arguments', t => {
   });
 });
 
-test.serial('exports internal variables', t => {
-  const programWithout = program([]);
-  t.falsy(programWithout.__internal);
+test.serial('exports internal methods', t => {
+  const programWithout = program([], '', '', false);
+  t.falsy(programWithout.auth.storeScopedToken);
 
-  const programWith = program([], '', true);
-  t.truthy(programWith.__internal);
+  const programWith = program([], '', '', true);
+  t.truthy(programWith.auth.storeScopedToken);
 });
 
 test.serial('sets scopes env var', t => {
@@ -55,4 +56,9 @@ test.serial('sets storage_method env var', t => {
 
   program(storageMethod, []);
   t.is(process.env.TOKEN_STORAGE_METHOD, storageMethod);
+});
+
+test.serial('sets user format env var', t => {
+  program([], '', 'email', true);
+  t.is(process.env.USER_ID_FORMAT, 'email');
 });

@@ -22,7 +22,7 @@ const __isExpressCall = (arg1, arg2) =>
 exports.init = (arg1, arg2, arg3) => {
   const handler = (req, res, scopes, next) => {
     res.redirect(
-      tokenStorage.__client.generateAuthUrl({
+      tokenStorage.getClient().generateAuthUrl({
         access_type: 'offline',
         scope: scopes,
         prompt: 'consent', // Needed so we receive a refresh token every time
@@ -47,10 +47,11 @@ exports.cb = (arg1, arg2, arg3) => {
 
   const handler = (req, res, next, onSuccess, onFailure) => {
     const code = req.query.code;
+    const scopes = req.query.scopes.split(' ');
 
     // OAuth2: Exchange authorization code for access token
     return new Promise((resolve, reject) => {
-      tokenStorage.__client.getToken(code, (err, token) => {
+      tokenStorage.getClient().getToken(code, (err, token) => {
         if (err) {
           return reject(err);
         }
@@ -59,7 +60,10 @@ exports.cb = (arg1, arg2, arg3) => {
     })
       .then(token => {
         // Store token
-        return tokenStorage.storeToken(req, res, token);
+        return tokenStorage.storeScopedToken(req, res, {
+          scopes: scopes,
+          token: token,
+        });
       })
       .then(() => {
         // Custom actions

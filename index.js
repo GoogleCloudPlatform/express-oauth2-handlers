@@ -16,10 +16,11 @@
 let routes;
 let tokenStorage;
 
-module.exports = (storage_method, scopes, include_internal_methods) => {
+module.exports = (storageMethod, scopes, userIdFormat, showInternals) => {
   // Set global config env vars
   process.env.DEFAULT_SCOPES = (scopes || []).join(',');
-  process.env.TOKEN_STORAGE_METHOD = storage_method || 'cookie';
+  process.env.TOKEN_STORAGE_METHOD = storageMethod;
+  process.env.USER_ID_FORMAT = userIdFormat;
 
   // Import libraries (AFTER setting env vars)
   routes = require('./routes');
@@ -28,7 +29,12 @@ module.exports = (storage_method, scopes, include_internal_methods) => {
   // Export library methods
   let exported = {
     auth: {
-      getClient: tokenStorage.getAuth,
+      isAuthed: tokenStorage.isAuthed,
+      authedUser: {
+        hasScope: tokenStorage.authedUserHasScope,
+        getClient: tokenStorage.getAuth,
+        getToken: tokenStorage.getAuthedToken,
+      },
     },
     routes: {
       init: routes.init,
@@ -37,29 +43,12 @@ module.exports = (storage_method, scopes, include_internal_methods) => {
   };
 
   // Export internal methods (if asked to, in case someone needs these)
-  if (include_internal_methods) {
-    exported.__internal = {
-      __storeToken: tokenStorage.storeToken,
-      __getToken: tokenStorage.getToken,
-    };
+  if (showInternals) {
+    exported.auth.authedUser.getUserId = tokenStorage.getAuthedUserId;
+    exported.auth.authedUser.getScopedToken = tokenStorage.getAuthedScopedToken;
+    exported.auth.storeScopedToken = tokenStorage.storeScopedToken;
   }
 
   // Done!
   return exported;
 };
-
-// // ekoleda@ sbazyl@
-
-// // DESIGN
-// o2.routes.{init / cb}
-// o2.getToken - gets token
-// o2.__tokenLib.{__get/__set} - backend functions
-
-// // SAMPLE USAGE
-// const Auth = require('@google-cloud/express-oauth2');
-// const auth = Auth(scopes, storage_type);
-
-// // GCF
-// exports.oauth2init = auth.routes.init("/oauth2callback")
-//                    = auth.routes.init("/oauth2callback", [scopes])
-// exports.oauth2callback = auth.routes.cb

@@ -19,7 +19,7 @@ const proxyquire = require(`proxyquire`)
   .noPreserveCache()
   .noCallThru();
 
-function getSample(storageMethod, datastoreResult, cookieResult, expiryDate) {
+function getSample(datastoreResult, cookieResult, expiryDate) {
   expiryDate = expiryDate || new Date(8640000000000000);
 
   const datastoreMock = {
@@ -36,21 +36,48 @@ function getSample(storageMethod, datastoreResult, cookieResult, expiryDate) {
 
   const resMock = {
     cookie: sinon.stub(),
+    locals: {},
   };
 
   const configMock = {
-    STORAGE_METHOD: storageMethod,
-    ERROR_STORAGE_TYPE: 'error_storage_type',
+    STORAGE_METHOD: (datastoreResult && 'datastore') || 'cookie',
+    USER_ID_FORMAT: 'email',
+    ERROR_UNKNOWN_USER: 'error_unknown_user',
+    ERROR_STORAGE_METHOD: 'error_storage_method',
     ERROR_NEEDS_USERID: 'error_needs_userid',
+    ERROR_CALLBACK_ARG_TYPES: 'error_callback_arg_types',
+    ERROR_SCOPED_ONLY: 'error_scoped_only',
+    ERROR_USERID_FORMAT: 'error_userid_format',
+    ERROR_USERID_SCOPES: 'error_userid_scopes',
+    ERROR_NOT_AUTHED: 'error_not_authed',
+  };
+
+  const oauth2ClientMock = {
+    credentials: {
+      expiry_date: expiryDate,
+    },
+    refreshAccessToken: sinon.stub().yields(null, {}),
   };
 
   const googleAuthMock = {
-    OAuth2Client: sinon.stub().returns({
-      credentials: {
-        expiry_date: expiryDate,
+    OAuth2Client: sinon.stub().returns(oauth2ClientMock),
+  };
+
+  const oauth2ApiMock = {
+    v2: {
+      me: {
+        get: sinon.stub().yields(null, {
+          email: 'email',
+          id: 600613,
+        }),
       },
-      refreshAccessToken: sinon.stub().yields(null, {}),
-    }),
+    },
+  };
+
+  const googleapisMock = {
+    oauth2_v2: {
+      Oauth2: sinon.stub().returns(oauth2ApiMock),
+    },
   };
 
   return {
@@ -58,12 +85,15 @@ function getSample(storageMethod, datastoreResult, cookieResult, expiryDate) {
       '@google-cloud/datastore': datastoreMock,
       './config': configMock,
       'google-auth-library': googleAuthMock,
+      googleapis: googleapisMock,
     }),
     mocks: {
-      req: reqMock,
-      res: resMock,
+      config: configMock,
       datastore: datastoreMock,
       googleAuth: googleAuthMock,
+      oauth2Client: oauth2ClientMock,
+      req: reqMock,
+      res: resMock,
     },
   };
 }
@@ -71,41 +101,40 @@ function getSample(storageMethod, datastoreResult, cookieResult, expiryDate) {
 const test = require('ava');
 
 /* Basic tests */
-test('should store token using cookies', t => {
-  const sample = getSample('cookie');
+test('storeScopedToken should store token using cookies', t => {
+  const {program, mocks} = getSample();
 
-  const reqMock = sample.mocks.req;
-  const resMock = sample.mocks.res;
-  const datastoreMock = sample.mocks.datastore;
-
-  const token = uuid4();
+  const token = {
+    token: uuid4(),
+    scopes: [],
+  };
   const userId = uuid4();
 
-  sample.program.storeToken(reqMock, resMock, token, userId);
+  program.storeScopedToken(mocks.req, mocks.res, token, userId);
 
-  t.true(resMock.cookie.calledOnce);
-  t.true(datastoreMock.save.notCalled);
-  t.deepEqual(resMock.cookie.firstCall.args, [
+  t.true(mocks.res.cookie.calledOnce);
+  t.true(mocks.datastore.save.notCalled);
+  t.deepEqual(mocks.res.cookie.firstCall.args, [
     'oauth2token',
     JSON.stringify(token),
   ]);
 });
 
-test('should store token using datastore', t => {
-  const sample = getSample('datastore');
+test('storeScopedToken should store token using datastore', t => {
+  const {program, mocks} = getSample();
+  mocks.config.STORAGE_METHOD = 'datastore';
 
-  const reqMock = sample.mocks.req;
-  const resMock = sample.mocks.res;
-  const datastoreMock = sample.mocks.datastore;
-
-  const token = uuid4();
+  const token = {
+    token: uuid4(),
+    scopes: [],
+  };
   const userId = uuid4();
 
-  sample.program.storeToken(reqMock, resMock, token, userId);
+  program.storeScopedToken(mocks.req, mocks.res, token, userId);
 
-  t.true(resMock.cookie.notCalled);
-  t.true(datastoreMock.save.calledOnce);
-  t.deepEqual(datastoreMock.save.firstCall.args, [
+  t.true(mocks.res.cookie.notCalled);
+  t.true(mocks.datastore.save.calledOnce);
+  t.deepEqual(mocks.datastore.save.firstCall.args, [
     {
       key: ['oauth2token', userId],
       data: token,
@@ -113,116 +142,294 @@ test('should store token using datastore', t => {
   ]);
 });
 
-test('should get auth via token in cookies', async t => {
+test('storeScopedToken should fail if token is not a scopedToken', async t => {
+  const {program, mocks} = getSample(null, 'foo=bar');
+  mocks.config.STORAGE_METHOD = 'datastore';
+
+  await t.throwsAsync(() => {
+    return program.storeScopedToken(mocks.req, mocks.res, {token: uuid4()});
+  }, 'error_scoped_only');
+
+  await t.throwsAsync(() => {
+    return program.storeScopedToken(mocks.req, mocks.res, {scopes: []});
+  }, 'error_scoped_only');
+});
+
+test('getAuthedClient should read token via cookies', async t => {
   const refreshToken = uuid4();
   const userId = uuid4();
   const inputToken = {
-    expiry_date: new Date(8640000000000000).toString(),
-    refresh_token: refreshToken,
+    token: {
+      expiry_date: new Date(8640000000000000).toString(),
+      refresh_token: refreshToken,
+    },
+    scopes: [],
   };
   const inputCookie = `oauth2token=${JSON.stringify(inputToken)}`;
 
-  const sample = getSample('cookie', null, inputCookie);
+  const {program, mocks} = getSample(null, inputCookie);
 
-  const reqMock = sample.mocks.req;
-  const resMock = sample.mocks.res;
-  const datastoreMock = sample.mocks.datastore;
+  const mockAuth = await program.getAuthedClient(mocks.req, mocks.res, userId);
 
-  const mockAuth = await sample.program.getAuth(reqMock, resMock, userId);
-
-  t.true(datastoreMock.get.notCalled);
-  t.deepEqual(mockAuth.credentials, inputToken);
+  t.true(mocks.datastore.get.notCalled);
+  t.deepEqual(mockAuth.credentials, inputToken.token);
 });
 
-test('should get auth via token in datastore', async t => {
+test('getAuthedClient should read token via datastore', async t => {
   const refreshToken = uuid4();
   const userId = uuid4();
   const inputToken = {
-    expiry_date: new Date(8640000000000000).toString(),
-    refresh_token: refreshToken,
+    token: {
+      expiry_date: new Date(8640000000000000).toString(),
+      refresh_token: refreshToken,
+    },
+    scopes: [],
   };
 
-  const sample = getSample('datastore', [inputToken]);
+  const {program, mocks} = getSample([inputToken]);
 
-  const reqMock = sample.mocks.req;
-  const resMock = sample.mocks.res;
-  const datastoreMock = sample.mocks.datastore;
+  const mockAuth = await program.getAuthedClient(mocks.req, mocks.res, userId);
 
-  const mockAuth = await sample.program.getAuth(reqMock, resMock, userId);
-
-  t.true(datastoreMock.get.calledOnce);
-  t.deepEqual(datastoreMock.get.firstCall.args, [['oauth2token', userId]]);
-  t.deepEqual(mockAuth.credentials, inputToken);
+  t.true(mocks.datastore.get.calledOnce);
+  t.deepEqual(mocks.datastore.get.firstCall.args, [['oauth2token', userId]]);
+  t.deepEqual(mockAuth.credentials, inputToken.token);
 });
 
 /* Edge cases */
-test('should validate storage method', async t => {
-  const sample = getSample('foobar');
-  const program = sample.program;
-
-  const reqMock = sample.mocks.req;
-  const resMock = sample.mocks.res;
+test('storeScopedToken should validate storage method', async t => {
+  const token = {
+    scopes: [],
+    token: {},
+  };
+  const {program, mocks} = getSample();
+  mocks.config.STORAGE_METHOD = 'foobar';
 
   await t.throwsAsync(async () => {
-    await program.storeToken(reqMock, resMock);
-  }, 'error_storage_type');
+    await program.storeScopedToken(mocks.req, mocks.res, token);
+  }, 'error_storage_method');
 });
 
-test('should require userid for datastore', async t => {
-  const sample = getSample('datastore');
-  const program = sample.program;
-
-  const reqMock = sample.mocks.req;
-  const resMock = sample.mocks.res;
+test('storeScopedToken should require userid for datastore', async t => {
+  const {program, mocks} = getSample([]);
+  const token = {
+    scopes: [],
+    token: {},
+  };
 
   await t.throwsAsync(async () => {
-    await program.getAuth(reqMock, resMock);
-  }, 'error_needs_userid');
-  await t.throwsAsync(async () => {
-    await program.storeToken(reqMock, resMock);
+    await program.storeScopedToken(mocks.req, mocks.res, token);
   }, 'error_needs_userid');
 });
 
-test('should throw error for missing user with datastore', async t => {
-  const sample = getSample('datastore', []);
-  const program = sample.program;
-
-  const reqMock = sample.mocks.req;
-  const resMock = sample.mocks.res;
+test('getAuthedClient should require userId if using datastore', async t => {
+  const {program, mocks} = getSample([]);
 
   await t.throwsAsync(async () => {
-    await program.getAuth(reqMock, resMock);
+    await program.getAuthedClient(mocks.req, mocks.res);
   }, 'error_needs_userid');
 });
 
-test('should throw error for missing user with cookies', async t => {
-  const sample = getSample('datastore', [{}], 'foo=bar');
-  const program = sample.program;
-
-  const reqMock = sample.mocks.req;
-  const resMock = sample.mocks.res;
+test('getAuthClient should throw error for missing user with datastore', async t => {
+  const {program, mocks} = getSample([]);
 
   await t.throwsAsync(async () => {
-    await program.getAuth(reqMock, resMock);
-  }, 'error_needs_userid');
+    await program.getAuthedClient(mocks.req, mocks.res, 'foo');
+  }, 'error_unknown_user');
 });
 
-test('should refresh out-of-date token', async t => {
+test('getAuthClient should throw error for missing user with cookies', async t => {
+  const {program, mocks} = getSample(null, 'foo=bar');
+
+  await t.throwsAsync(async () => {
+    await program.getAuthedClient(mocks.req, mocks.res);
+  }, 'error_unknown_user');
+});
+
+test('getAuthClient should refresh out-of-date token', async t => {
   const refreshToken = uuid4();
   const userId = uuid4();
   const inputToken = {
-    expiry_date: Date.now().toString(),
-    refresh_token: refreshToken,
+    token: {
+      expiry_date: Date.now().toString(),
+      refresh_token: refreshToken,
+    },
+    scopes: [],
   };
   const inputCookie = `oauth2token=${JSON.stringify(inputToken)}`;
 
-  const sample = getSample('cookie', null, inputCookie, Date.now());
+  const {program, mocks} = getSample(null, inputCookie, Date.now());
 
-  const reqMock = sample.mocks.req;
-  const resMock = sample.mocks.res;
-
-  const mockAuth = await sample.program.getAuth(reqMock, resMock, userId);
+  const mockAuth = await program.getAuthedClient(mocks.req, mocks.res, userId);
 
   t.true(mockAuth.refreshAccessToken.calledOnce);
-  t.true(resMock.cookie.calledOnce);
+  t.true(mocks.res.cookie.calledOnce);
+});
+
+/* Helper methods */
+test('getAuthedClient auto-auths', async t => {
+  const inputToken = {
+    scopes: [],
+    token: {},
+  };
+  const {program, mocks} = getSample([inputToken], null, Date.now());
+
+  const mockAuth = await program.getAuthedClient(mocks.req, mocks.res, 'foo');
+  t.deepEqual(mockAuth, mocks.oauth2Client);
+  t.true(mocks.oauth2Client.refreshAccessToken.calledOnce);
+});
+
+test('getAuthedUserId fails without auth (and does not auto-auth)', async t => {
+  const inputToken = {
+    scopes: [],
+    token: {},
+  };
+
+  const {program, mocks} = getSample([inputToken], null, Date.now());
+
+  await t.throwsAsync(() => {
+    return program.getAuthedUserId(mocks.req, mocks.res, 'foo');
+  }, 'error_not_authed');
+  t.true(mocks.oauth2Client.refreshAccessToken.notCalled);
+});
+
+test('storeScopedToken succeeds without auth', async t => {
+  const token = {
+    scopes: [],
+    token: {},
+  };
+  const {program, mocks} = getSample();
+
+  await program.storeScopedToken(mocks.req, mocks.res, token);
+
+  t.true(mocks.res.cookie.calledOnce);
+  t.true(mocks.res.cookie.calledWith('oauth2token', JSON.stringify(token)));
+});
+
+test('getAuthedScopedToken auto-auths', async t => {
+  const token = {
+    scopes: [],
+    token: {},
+  };
+  const {program, mocks} = getSample([token], null, Date.now());
+
+  await program.getAuthedScopedToken(mocks.req, mocks.res, 'foo');
+  t.true(mocks.oauth2Client.refreshAccessToken.calledOnce);
+});
+
+test('getAuthedToken auto-auths', async t => {
+  const token = {
+    scopes: [],
+    token: {},
+  };
+  const {program, mocks} = getSample([token], null, Date.now());
+
+  await program.getAuthedToken(mocks.req, mocks.res, 'foo');
+  t.true(mocks.oauth2Client.refreshAccessToken.calledOnce);
+});
+
+test('authedUserHasScope fails without auth (and does not auto-auth)', async t => {
+  const token = {
+    scopes: [],
+    token: {},
+  };
+  const {program, mocks} = getSample();
+
+  await t.throwsAsync(() => {
+    return program.authedUserHasScope(mocks.req, mocks.res, token);
+  }, 'error_not_authed');
+  t.true(mocks.oauth2Client.refreshAccessToken.notCalled);
+});
+
+test('getAuthedUserId fails with zero required scopes', async t => {
+  const token = {
+    scopes: ['not_email'],
+    token: {},
+  };
+  const userId = uuid4();
+  const {program, mocks} = getSample([token], null, userId);
+
+  await program.getAuthedClient(mocks.req, mocks.res, userId); // Authenticate
+  t.true(mocks.oauth2Client.refreshAccessToken.calledOnce);
+
+  await t.throwsAsync(() => {
+    return program.getAuthedUserId(mocks.req, mocks.res, token);
+  }, 'error_userid_scopes');
+});
+
+test('getAuthedUserId passes with one required scope', async t => {
+  const token = {
+    scopes: ['email'],
+    token: {},
+  };
+  const userId = uuid4();
+  const {program, mocks} = getSample([token], null, userId);
+
+  await program.getAuthedClient(mocks.req, mocks.res, userId); // Authenticate
+  t.true(mocks.oauth2Client.refreshAccessToken.calledOnce);
+
+  await t.notThrowsAsync(() => {
+    return program.getAuthedUserId(mocks.req, mocks.res, token);
+  });
+});
+
+test('getAuthedUserId checks for invalid userId formats', async t => {
+  const token = {
+    scopes: ['email'],
+    token: {},
+  };
+  const userId = uuid4();
+  const {program, mocks} = getSample([token]);
+
+  mocks.config.USER_ID_FORMAT = 'bad_format';
+
+  await program.getAuthedClient(mocks.req, mocks.res, userId); // Authenticate
+  t.true(mocks.oauth2Client.refreshAccessToken.calledOnce);
+
+  await t.throwsAsync(() => {
+    return program.getAuthedUserId(mocks.req, mocks.res, token);
+  }, 'error_userid_format');
+});
+
+test('getAuthedUserId succeeds with valid userId formats', async t => {
+  const token = {
+    scopes: ['email'],
+    token: {},
+  };
+  const userId = uuid4();
+  const {program, mocks} = getSample([token]);
+
+  mocks.config.USER_ID_FORMAT = 'email';
+
+  await program.getAuthedClient(mocks.req, mocks.res, userId); // Authenticate
+  t.true(mocks.oauth2Client.refreshAccessToken.calledOnce);
+
+  await t.notThrowsAsync(() => {
+    return program.getAuthedUserId(mocks.req, mocks.res, token);
+  });
+});
+
+test('authedUserHasScope checks if a user has a given scope', async t => {
+  const token = {
+    scopes: ['email'],
+    token: {},
+  };
+  const userId = uuid4();
+  const {program, mocks} = getSample([token]);
+
+  await program.getAuthedClient(mocks.req, mocks.res, userId); // Authenticate
+  t.true(mocks.oauth2Client.refreshAccessToken.calledOnce);
+
+  const includedScope = await program.authedUserHasScope(
+    mocks.req,
+    mocks.res,
+    'email'
+  );
+  t.true(includedScope);
+
+  const excludedScope = await program.authedUserHasScope(
+    mocks.req,
+    mocks.res,
+    'not_scope'
+  );
+  t.false(excludedScope);
 });

@@ -61,6 +61,7 @@ exports.GOOGLE_CALLBACK_URL = nconf.get('GOOGLE_CALLBACK_URL');
 /* Options */
 exports.STORAGE_METHOD = nconf.get('TOKEN_STORAGE_METHOD');
 exports.DEFAULT_SCOPES = nconf.get('DEFAULT_SCOPES').split(','); // Comma-separated
+exports.USER_ID_FORMAT = nconf.get('USER_ID_FORMAT');
 
 /* Errors */
 exports.ERROR_UNKNOWN_USER = 'User referenced by user ID has not registered.';
@@ -70,3 +71,10 @@ exports.ERROR_NEEDS_USERID =
   'A userId is required to store tokens in datastore.';
 exports.ERROR_CALLBACK_ARG_TYPES =
   'If cb() is provided options, both "onSuccess" and "onFailure" must be provided (as redirect URLs OR callbacks)';
+exports.ERROR_SCOPED_ONLY =
+  'This method only accepts "scoped" tokens. Use the getScopedToken() function to obtain them.';
+exports.ERROR_USERID_FORMAT =
+  'Unknown user ID format. User ID format must be a string ("email" or "gaiaId") or a function.';
+exports.ERROR_USERID_SCOPES =
+  'Using an email address or GAIA ID as user IDs requires adding the "profile" or "email" scopes.';
+exports.ERROR_NOT_AUTHED = 'A user must be authenticated to use this method';

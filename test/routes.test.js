@@ -36,13 +36,14 @@ function getSample(defaultScopes) {
   };
 
   const tokenStorageMock = {
-    storeToken: sinon.stub().resolves(),
-    __client: authClientMock,
+    storeScopedToken: sinon.stub().resolves(),
+    getClient: sinon.stub().returns(authClientMock),
   };
 
   const reqMock = {
     query: {
       code: 'foo',
+      scopes: 'scope1 scope2 scope3',
     },
   };
 
@@ -73,83 +74,66 @@ function getSample(defaultScopes) {
 
 /* Common cases */
 test('init: should accept one argument (scope array)', t => {
-  const sample = getSample();
-
-  const reqMock = sample.mocks.req;
-  const resMock = sample.mocks.res;
+  const {program, mocks} = getSample();
   const nextMock = sinon.stub();
 
-  const handler = sample.program.init(['scope']);
+  const handler = program.init(['scope']);
 
-  handler(reqMock, resMock, nextMock);
+  handler(mocks.req, mocks.res, nextMock);
 
-  t.true(sample.mocks.authClient.generateAuthUrl.calledOnce);
-  t.true(resMock.redirect.calledOnce);
+  t.true(mocks.authClient.generateAuthUrl.calledOnce);
+  t.true(mocks.res.redirect.calledOnce);
   t.true(nextMock.calledOnce);
 });
 
 test('init: should accept zero arguments', t => {
-  const sample = getSample();
-
-  const reqMock = sample.mocks.req;
-  const resMock = sample.mocks.res;
+  const {program, mocks} = getSample();
   const nextMock = sinon.stub();
 
-  const handler = sample.program.init;
+  const handler = program.init;
 
-  handler(reqMock, resMock, nextMock);
+  handler(mocks.req, mocks.res, nextMock);
 
-  t.true(sample.mocks.authClient.generateAuthUrl.calledOnce);
-  t.true(resMock.redirect.calledOnce);
+  t.true(mocks.authClient.generateAuthUrl.calledOnce);
+  t.true(mocks.res.redirect.calledOnce);
   t.true(nextMock.calledOnce);
 });
 
 test('cb: should accept GCF args (req, res)', async t => {
-  const sample = getSample();
+  const {program, mocks} = getSample();
 
-  const reqMock = sample.mocks.req;
-  const resMock = sample.mocks.res;
-  const tokenStorageMock = sample.mocks.tokenStorage;
+  const handler = program.cb;
+  await handler(mocks.req, mocks.res);
 
-  const handler = sample.program.cb;
-  await handler(reqMock, resMock);
+  t.true(mocks.authClient.getToken.calledOnce);
+  t.true(mocks.tokenStorage.storeScopedToken.calledOnce);
 
-  t.true(tokenStorageMock.__client.getToken.calledOnce);
-  t.true(tokenStorageMock.storeToken.calledOnce);
-
-  t.true(resMock.status.calledWith(200));
-  t.true(resMock.send.calledOnce);
+  t.true(mocks.res.status.calledWith(200));
+  t.true(mocks.res.send.calledOnce);
 });
 
 test('cb: should accept middleware args (req, res, next)', async t => {
-  const sample = getSample();
-
-  const reqMock = sample.mocks.req;
-  const resMock = sample.mocks.res;
+  const {program, mocks} = getSample();
   const nextMock = sinon.stub();
-  const tokenStorageMock = sample.mocks.tokenStorage;
 
-  const handler = sample.program.cb;
-  await handler(reqMock, resMock, nextMock);
+  const handler = program.cb;
+  await handler(mocks.req, mocks.res, nextMock);
 
-  t.true(tokenStorageMock.__client.getToken.calledOnce);
-  t.true(tokenStorageMock.storeToken.calledOnce);
+  t.true(mocks.authClient.getToken.calledOnce);
+  t.true(mocks.tokenStorage.storeScopedToken.calledOnce);
   t.true(nextMock.calledOnce);
 });
 
 /* cb success/failure handlers */
 test('cb: should handle success with callback function', async t => {
-  const sample = getSample();
+  const {program, mocks} = getSample();
 
   const onSuccess = sinon.stub();
   const onFailure = sinon.stub();
-
-  const reqMock = sample.mocks.req;
-  const resMock = sample.mocks.res;
   const nextMock = sinon.stub();
 
-  const handler = sample.program.cb(onSuccess, onFailure);
-  await handler(reqMock, resMock, nextMock);
+  const handler = program.cb(onSuccess, onFailure);
+  await handler(mocks.req, mocks.res, nextMock);
 
   t.true(onSuccess.calledOnce);
   t.true(onFailure.notCalled);
@@ -157,72 +141,57 @@ test('cb: should handle success with callback function', async t => {
 });
 
 test('cb: should handle error with callback function', async t => {
-  const sample = getSample();
-  sample.mocks.tokenStorage.storeToken = sinon.stub().rejects();
+  const {program, mocks} = getSample();
+  mocks.tokenStorage.storeScopedToken = sinon.stub().rejects();
 
   const onSuccess = sinon.stub();
   const onFailure = sinon.stub();
 
-  const reqMock = sample.mocks.req;
-  const resMock = sample.mocks.res;
-
-  const handler = sample.program.cb(onSuccess, onFailure);
-  await handler(reqMock, resMock);
+  const handler = program.cb(onSuccess, onFailure);
+  await handler(mocks.req, mocks.res);
 
   t.true(onSuccess.notCalled);
   t.true(onFailure.calledOnce);
 });
 
 test('cb: should handle success with string redirect', async t => {
-  const sample = getSample();
+  const {program, mocks} = getSample();
 
-  const reqMock = sample.mocks.req;
-  const resMock = sample.mocks.res;
+  const handler = program.cb('success', 'failure');
+  await handler(mocks.req, mocks.res);
 
-  const handler = sample.program.cb('success', 'failure');
-  await handler(reqMock, resMock);
-
-  t.true(resMock.redirect.calledWith('success'));
+  t.true(mocks.res.redirect.calledWith('success'));
 });
 
 test('cb: should handle error with string redirect', async t => {
-  const sample = getSample();
-  sample.mocks.tokenStorage.storeToken = sinon.stub().rejects();
+  const {program, mocks} = getSample();
+  mocks.tokenStorage.storeScopedToken = sinon.stub().rejects();
 
-  const reqMock = sample.mocks.req;
-  const resMock = sample.mocks.res;
+  const handler = program.cb('success', 'failure');
+  await handler(mocks.req, mocks.res);
 
-  const handler = sample.program.cb('success', 'failure');
-  await handler(reqMock, resMock);
-
-  t.true(resMock.redirect.calledWith('failure'));
+  t.true(mocks.res.redirect.calledWith('failure'));
 });
 
 /* DEFAULT_SCOPES behavior */
 test('should respect DEFAULT_SCOPES setting', async t => {
-  const sample = getSample(['scope_a']);
+  const {program, mocks} = getSample(['scope_a']);
 
-  const reqMock = sample.mocks.req;
-  const resMock = sample.mocks.res;
+  const handler = program.init;
+  await handler(mocks.req, mocks.res);
 
-  const handler = sample.program.init;
-  await handler(reqMock, resMock);
-
-  const authFunc = sample.mocks.tokenStorage.__client.generateAuthUrl;
+  const authFunc = mocks.authClient.generateAuthUrl;
   t.true(authFunc.calledOnce);
   t.deepEqual(authFunc.firstCall.args[0].scope, ['scope_a']);
 });
 
 test('local scopes should override DEFAULT_SCOPES setting', async t => {
-  const sample = getSample(['scope_a']);
+  const {program, mocks} = getSample(['scope_a']);
 
-  const reqMock = sample.mocks.req;
-  const resMock = sample.mocks.res;
+  const handler = program.init(['scope_b']);
+  await handler(mocks.req, mocks.res);
 
-  const handler = sample.program.init(['scope_b']);
-  await handler(reqMock, resMock);
-
-  const authFunc = sample.mocks.tokenStorage.__client.generateAuthUrl;
+  const authFunc = mocks.authClient.generateAuthUrl;
   t.true(authFunc.calledOnce);
   t.deepEqual(authFunc.firstCall.args[0].scope, ['scope_b']);
 });
