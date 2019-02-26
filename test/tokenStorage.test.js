@@ -434,3 +434,40 @@ test('authedUserHasScope checks if a user has a given scope', async t => {
   );
   t.false(excludedScope);
 });
+
+test('canAuth auto-auths and returns true if it succeeds', async t => {
+  const token = {
+    scopes: [],
+    token: {},
+  };
+  const {program, mocks} = getSample([token], null, Date.now());
+
+  const result = await program.canAuth(mocks.req, mocks.res, 'foo');
+  t.true(result);
+  t.true(mocks.oauth2Client.refreshAccessToken.calledOnce);
+});
+
+test('canAuth returns true if already authenticated', async t => {
+  const token = {
+    scopes: [],
+    token: {},
+  };
+  const {program, mocks} = getSample([token], null, Date.now());
+
+  await program.getAuthedClient(mocks.req, mocks.res, 'foo');
+  t.true(mocks.oauth2Client.refreshAccessToken.calledOnce);
+
+  const result = await program.canAuth(mocks.req, mocks.res, 'foo');
+  t.true(result);
+});
+
+test('canAuth returns false if auth fails', async t => {
+  const {program, mocks} = getSample(null);
+  mocks.config.STORAGE_METHOD = 'datastore'; // Nonexistent user
+
+  const call = program.canAuth(mocks.req, mocks.res, 'foo');
+  await t.notThrowsAsync(call);
+
+  const result = await call;
+  t.false(result);
+});

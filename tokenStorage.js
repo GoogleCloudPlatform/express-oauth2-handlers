@@ -211,8 +211,14 @@ const __getAuthedUserId = (req, res) => {
 };
 
 /* Library exports (for code clarity/cleanliness) */
-exports.isAuthed = (req, res) => {
-  return __isAuthed(req, res);
+exports.canAuth = (req, res, userId) => {
+  return __requireAnyAuth(req, res, userId)
+    .then(() => {
+      return Promise.resolve(true);
+    })
+    .catch(() => {
+      return Promise.resolve(false);
+    });
 };
 
 exports.getAuthedClient = async (req, res, userId) => {

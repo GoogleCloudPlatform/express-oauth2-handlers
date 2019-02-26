@@ -29,7 +29,7 @@ module.exports = (storageMethod, scopes, userIdFormat, showInternals) => {
   // Export library methods
   let exported = {
     auth: {
-      isAuthed: tokenStorage.isAuthed,
+      canAuth: tokenStorage.canAuth,
       authedUser: {
         hasScope: tokenStorage.authedUserHasScope,
         getClient: tokenStorage.getAuth,

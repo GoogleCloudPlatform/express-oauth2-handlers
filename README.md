@@ -78,8 +78,8 @@ Use the following chart to decide which storage method is right for your use cas
 _^ When fetching existing tokens_
 
 ## Methods
-##### `auth.isAuthed`
-Returns `true` if the current user's OAuth data has been loaded, and `false` otherwise.
+##### `auth.canAuth`
+Attempts to authenticate the specified user. Returns `true` if the operation succeeds, and `false` otherwise.
 
 ##### Arguments
 `req`
@@ -88,11 +88,11 @@ An Express-like request object
 `res`
 An Express-like response object
 
-##### `auth.authedUser.hasScope`
-Returns `true` if the currently authenticated user's token contains the specified scope, and `false` if it does not.
+`userId`
+_Datastore token-storage only._ A unique User ID specifying which user to associate the token with.
 
-**Note**
-If no user has been authenticated when this method is called, it returns a rejected `Promise`. Use [`auth.isAuthed`](#auth-isAuthed) to check whether a user has been authenticated.
+##### `auth.authedUser.hasScope`
+Check if the authenticated user's token contains a specified OAuth 2.0 scope.
 
 ##### Arguments
 `req`
@@ -105,7 +105,7 @@ An Express-like response object
 The OAuth 2.0 scope to check for
 
 ##### Returns
-A `Promise` containing a boolean value.
+A `Promise` containing a boolean value if a user has been authenticated; a rejected `Promise` otherwise.
 
 ##### `auth.authedUser.getClient`
 Retrieves the current user's (initialized and auto-authenticated) OAuth 2.0 client.
