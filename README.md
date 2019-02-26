@@ -32,23 +32,37 @@ Specify how OAuth 2.0 tokens will be stored. *Must* be one of the following valu
 ###### `DEFAULT_SCOPES`
 A comma-separated list (such as `scope1,scope2,scope3`) of OAuth 2.0 scopes to use. See [this page](https://developers.google.com/identity/protocols/googlescopes) for a list of OAuth 2.0 scopes supported by Google APIs.
 
+###### `USER_ID_FORMAT`
+The format to use for unique User IDs. Two formats are supported:
+- `email` email addresses
+- `gaiaId` Google accounts ID numbers
+
+We recommend using `gaiaId` when possible. However, some external platforms require the use of email addresses as unique User IDs. 
+
 ## Initialization
 When importing and initializing the library, several different parameters are used.
 
-###### `storage_method`
+###### `storageMethod`
 _Optional._ Specify how OAuth 2.0 tokens will be stored. Identical to (and takes precedence over) [`TOKEN_STORAGE_METHOD`](#token-storage-method) above.
 
 ###### `scopes`
 _Optional._ An array of OAuth 2.0 scopes to request. See [this page](https://developers.google.com/identity/protocols/googlescopes) for a list of OAuth 2.0 scopes supported by Google APIs. Takes precedence over the `DEFAULT_SCOPES` environment variable.
 
-###### `include_internal_methods`
-_Optional._ If set to `true`, certain [internal methods](#internal-methods) will be exposed. These methods allow you to manually store and retrieve OAuth 2.0 tokens.
+###### `userIdFormat`
+_Optional._ The format to use for unique User IDs. Identical to (and takes precedence over) [`USER_ID_FORMAT`](#user-id-format) above.
+
+###### `showInternals`
+_Optional._ If set to `true`, certain [internal methods](#internal-methods) will be exposed.
 
 ##### Example
-
 ```javascript
 const Auth = require('@google-cloud/express-oauth2-handlers');
-const auth = Auth('cookie', ['profile', 'email'])
+
+// Cookie
+const auth = Auth('cookie', ['profile', 'email']);
+
+// Datastore
+const auth = Auth('datastore', ['profile', 'email'], 'email');
 ```
 
 ##### Storage Methods
@@ -56,15 +70,45 @@ Use the following chart to decide which storage method is right for your use cas
 
 |                                  | `cookie` | `datastore` |
 | -------------------------------- | -------- | ------- |
+| Requires user IDs?               | **No**   | Yes |
 | Requires end-user interaction? ^ | Yes      | **No** |
 | Free?                            | **Yes**  | No |
 | Platform restricted?             | **No**   | Google Cloud only |
 
 _^ When fetching existing tokens_
 
-
 ## Methods
-##### `auth.getClient`
+_🔑 These methods automatically load the current user's OAuth configuration if necessary._
+_💬 These methods return Promises._
+_🛑 These methods are hidden by default. Use [`showInternals`](#show-internals) to expose them._
+
+##### `auth.isAuthed`
+Returns `true` if the current user's OAuth data has been loaded, and `false` otherwise.
+
+##### Arguments
+`req`
+An Express-like request object
+
+`res`
+An Express-like response object
+
+##### `auth.authedUser.hasScope` 💬
+Returns `true` if the currently authenticated user's token contains the specified scope, and `false` if it does not.
+
+**Note**
+If no user has been authenticated when this method is called, it returns a rejected `Promise`. Use [`auth.isAuthed`](#auth-isAuthed) to check whether a user has been authenticated.
+
+##### Arguments
+`req`
+An Express-like request object
+
+`res`
+An Express-like response object
+
+`scope`
+The OAuth 2.0 scope to check for
+
+##### `auth.authedUser.getClient` 🔑💬
 Returns a reference to the (initialized and authenticated) OAuth 2.0 client.
 
 ##### Arguments
@@ -75,7 +119,59 @@ An Express-like request object
 An Express-like response object
 
 `userId`
-_Datastore token-storage only._ A unique ID of type `string` that specifies which user the auth client will associate with.
+_Datastore token-storage only._ A unique User ID specifying which user the auth client will associate with.
+
+##### `auth.authedUser.getToken` 🔑💬
+Retrieves the standard _non-scoped_ OAuth 2.0 token associated with the specified (and authenticated) user.
+
+##### Arguments
+`req`
+An Express-like request object
+
+`res`
+An Express-like response object
+
+`userId`
+_Datastore token-storage only._ A unique User ID specifying which user's non-scoped token should be fetched.
+
+##### `auth.authedUser.getUserId` 💬🛑
+Returns the unique User ID of the currently authenticated user.
+
+##### Arguments
+`req`
+An Express-like request object
+
+`res`
+An Express-like response object
+
+##### `auth.storeScopedToken` 💬🛑
+Stores a scoped token associated with the specified user.
+
+##### Arguments
+`req`
+An Express-like request object
+
+`res`
+An Express-like response object
+
+`scopedToken`
+The scoped token to associate with the specified user.
+
+`userId`
+_Datastore token-storage only._ A unique User ID specifying which user to associate the token with.
+
+##### `auth.authedUser.getScopedToken` 🔑💬🛑
+Retrieves the scoped token associated with the specified (and authenticated) user.
+
+##### Arguments
+`req`
+An Express-like request object
+
+`res`
+An Express-like response object
+
+`userId`
+_Datastore token-storage only._ A unique User ID specifying which user's scoped token should be fetched.
 
 ## Routes
 Routes are functions that emulate [Connect](https://github.com/senchalabs/connect)-style middleware. They are compatible with [Express](https://github.com/expressjs/express), as well as Express-like platforms such as [Google Cloud Functions](https://cloud.google.com/functions/docs/calling/http).
@@ -98,38 +194,6 @@ _Optional._ A URL to redirect to **or** a callback function that accepts Express
 _Optional._ A URL to redirect to **or** a callback function that accepts Express-like `req` and `res` parameters to be called if the `cb` route fails to obtain and store an access token.
 
 _Note: if one of `onSuccess` and `onFailure` is provided, the other must be provided as well._
-
-### Internal Methods
-If `include_internal_methods` is a truthy value, the following internal methods will be exposed:
-
-#### `__internal.__storeToken`
-This method saves a provided OAuth 2.0 access token using the currently-configured storage method.
-
-##### Parameters
-`req`
-An Express-like request object
-
-`res`
-An Express-like response object
-
-`token`
-The OAuth 2.0 token to be stored, as an object.
-
-`userId`
-_Datastore token-storage only._ A unique ID of type `string` that specifies which user the token will be associated with.
-
-#### `__internal.__getToken`
-This method retrieves an OAuth 2.0 access token for the current user using the currently-configured storage method.
-
-##### Parameters
-`req`
-_Cookie token-storage only._ An Express-like request object
-
-`res`
-_Cookie token-storage only._ An Express-like response object
-
-`userId`
-_Datastore token-storage only._ A unique ID of type `string` that which user's token will be retrieved.
 
 ## Invocation
 
