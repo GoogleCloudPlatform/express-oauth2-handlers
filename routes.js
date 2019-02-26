@@ -59,11 +59,24 @@ exports.cb = (arg1, arg2, arg3) => {
       });
     })
       .then(token => {
+        // Add user ID, if necessary
+        if (config.NEEDS_USER_ID) {
+          return Promise.all([token, tokenStorage.getAuthedUserId(req, res)]);
+        } else {
+          return Promise.resolve([token, null]);
+        }
+      })
+      .then(([token, userId]) => {
         // Store token
-        return tokenStorage.storeScopedToken(req, res, {
-          scopes: scopes,
-          token: token,
-        });
+        return tokenStorage.storeScopedToken(
+          req,
+          res,
+          {
+            scopes: scopes,
+            token: token,
+          },
+          userId
+        );
       })
       .then(() => {
         // Custom actions

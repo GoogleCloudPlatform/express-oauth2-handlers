@@ -63,10 +63,13 @@ exports.STORAGE_METHOD = nconf.get('TOKEN_STORAGE_METHOD');
 exports.DEFAULT_SCOPES = nconf.get('DEFAULT_SCOPES').split(','); // Comma-separated
 exports.USER_ID_FORMAT = nconf.get('USER_ID_FORMAT');
 
+/* Computed values */
+exports.NEEDS_USER_ID = exports.STORAGE_METHOD === 'datastore';
+
 /* Errors */
 exports.ERROR_UNKNOWN_USER = 'User referenced by user ID has not registered.';
-exports.ERROR_STORAGE_TYPE =
-  'Unknown STORAGE_TYPE value. Must be "cookie" or "datastore"';
+exports.ERROR_STORAGE_METHOD =
+  'Unknown STORAGE_METHOD value. Must be "cookie" or "datastore"';
 exports.ERROR_NEEDS_USERID =
   'A userId is required to store tokens in datastore.';
 exports.ERROR_CALLBACK_ARG_TYPES =

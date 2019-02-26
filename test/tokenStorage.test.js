@@ -51,6 +51,7 @@ function getSample(datastoreResult, cookieResult, expiryDate) {
     ERROR_USERID_SCOPES: 'error_userid_scopes',
     ERROR_NOT_AUTHED: 'error_not_authed',
   };
+  configMock.NEEDS_USER_ID = configMock.STORAGE_METHOD === 'datastore';
 
   const oauth2ClientMock = {
     credentials: {

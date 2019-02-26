@@ -94,17 +94,16 @@ const __validateOrRefreshToken = (req, res, scopedToken, userId) => {
 };
 
 const __storeScopedToken = (req, res, scopedToken, userId) => {
-  // Verify token is a "scoped" token
+  // Data validation
   if (!__isScopedToken(scopedToken)) {
     return Promise.reject(new Error(config.ERROR_SCOPED_ONLY));
   }
+  if (config.NEEDS_USER_ID && !userId) {
+    return Promise.reject(new Error(config.ERROR_NEEDS_USERID));
+  }
 
+  // Store token
   if (config.STORAGE_METHOD === 'datastore') {
-    // Check for user ID
-    if (!userId) {
-      return Promise.reject(new Error(config.ERROR_NEEDS_USERID));
-    }
-
     return datastore.save({
       key: datastore.key(['oauth2token', userId]),
       data: scopedToken,
@@ -123,12 +122,12 @@ const __authenticate = (req, res, userId) => {
     return Promise.resolve(__cacheGet(res, 'scopedToken'));
   }
 
-  if (config.STORAGE_METHOD === 'datastore') {
-    // Check for user ID
-    if (!userId) {
-      return Promise.reject(new Error(config.ERROR_NEEDS_USERID));
-    }
+  if (config.NEEDS_USER_ID && !userId) {
+    return Promise.reject(new Error(config.ERROR_NEEDS_USERID));
+  }
 
+  // Get + validate token, then authenticate with it
+  if (config.STORAGE_METHOD === 'datastore') {
     return datastore
       .get(datastore.key(['oauth2token', userId]))
       .then(tokens => {
