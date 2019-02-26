@@ -78,10 +78,6 @@ Use the following chart to decide which storage method is right for your use cas
 _^ When fetching existing tokens_
 
 ## Methods
-_🔑 These methods automatically load the current user's OAuth configuration if necessary._
-_💬 These methods return Promises._
-_🛑 These methods are hidden by default. Use [`showInternals`](#show-internals) to expose them._
-
 ##### `auth.isAuthed`
 Returns `true` if the current user's OAuth data has been loaded, and `false` otherwise.
 
@@ -92,7 +88,7 @@ An Express-like request object
 `res`
 An Express-like response object
 
-##### `auth.authedUser.hasScope` 💬
+##### `auth.authedUser.hasScope`
 Returns `true` if the currently authenticated user's token contains the specified scope, and `false` if it does not.
 
 **Note**
@@ -108,8 +104,11 @@ An Express-like response object
 `scope`
 The OAuth 2.0 scope to check for
 
-##### `auth.authedUser.getClient` 🔑💬
-Returns a reference to the (initialized and authenticated) OAuth 2.0 client.
+##### Returns
+A `Promise` containing a boolean value.
+
+##### `auth.authedUser.getClient`
+Retrieves the current user's (initialized and auto-authenticated) OAuth 2.0 client.
 
 ##### Arguments
 `req`
@@ -121,8 +120,11 @@ An Express-like response object
 `userId`
 _Datastore token-storage only._ A unique User ID specifying which user the auth client will associate with.
 
-##### `auth.authedUser.getToken` 🔑💬
-Retrieves the standard _non-scoped_ OAuth 2.0 token associated with the specified (and authenticated) user.
+##### Returns
+A `Promise` containing a reference to the current user's authenticated OAuth 2.0 client.
+
+##### `auth.authedUser.getToken`
+Retrieves the standard _non-scoped_ OAuth 2.0 token associated with the specified (and auto-authenticated) user.
 
 ##### Arguments
 `req`
@@ -134,8 +136,11 @@ An Express-like response object
 `userId`
 _Datastore token-storage only._ A unique User ID specifying which user's non-scoped token should be fetched.
 
-##### `auth.authedUser.getUserId` 💬🛑
-Returns the unique User ID of the currently authenticated user.
+##### Returns
+A `Promise` containing the currently-authenticated user's OAuth 2.0 token.
+
+##### `auth.authedUser.getUserId`
+**Internal.** Returns the unique User ID of the currently authenticated user.
 
 ##### Arguments
 `req`
@@ -144,8 +149,11 @@ An Express-like request object
 `res`
 An Express-like response object
 
-##### `auth.storeScopedToken` 💬🛑
-Stores a scoped token associated with the specified user.
+##### Returns
+A `Promise` containing the current user's GAIA ID or email address, depending on the value of [`USER_ID_FORMAT`](#USER-ID-FORMAT).
+
+##### `auth.storeScopedToken`
+**Internal.** Stores a scoped token associated with the specified user.
 
 ##### Arguments
 `req`
@@ -160,8 +168,11 @@ The scoped token to associate with the specified user.
 `userId`
 _Datastore token-storage only._ A unique User ID specifying which user to associate the token with.
 
-##### `auth.authedUser.getScopedToken` 🔑💬🛑
-Retrieves the scoped token associated with the specified (and authenticated) user.
+##### Returns
+A `Promise` that resolves once the scoped token has been stored.
+
+##### `auth.authedUser.getScopedToken`
+**Internal.** Retrieves the scoped token associated with the specified (and auto-authenticated) user.
 
 ##### Arguments
 `req`
@@ -172,6 +183,9 @@ An Express-like response object
 
 `userId`
 _Datastore token-storage only._ A unique User ID specifying which user's scoped token should be fetched.
+
+##### Returns
+A `Promise` containing the scoped token.
 
 ## Routes
 Routes are functions that emulate [Connect](https://github.com/senchalabs/connect)-style middleware. They are compatible with [Express](https://github.com/expressjs/express), as well as Express-like platforms such as [Google Cloud Functions](https://cloud.google.com/functions/docs/calling/http).
