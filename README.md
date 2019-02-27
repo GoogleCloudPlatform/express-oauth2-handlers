@@ -18,6 +18,10 @@ The following values can be obtained by [generating a new OAuth 2.0 client ID](h
 - **`GOOGLE_CLIENT_SECRET`**
 - **`GOOGLE_CALLBACK_URL`**
 
+##### Reserved values
+These values are set by [some](https://cloud.google.com/functions/docs/env-var#reserved_keys_key_validation) (but not all) Google Cloud hosting platforms. Do **not** set them yourself or change their values.
+- **`FUNCTION_TRIGGER_TYPE`**
+
 **Note**
 These values (and in particular the `GOOGLE_CLIENT_SECRET` value) should not be stored/committed alongside your codebase. As such, this library does _not_ support specifying these values programmatically.
 
@@ -78,28 +82,47 @@ Use the following chart to decide which storage method is right for your use cas
 _^ When fetching existing tokens_
 
 ## Methods
-##### `auth.canAuth`
-Attempts to authenticate the specified user. Returns `true` if the operation succeeds, and `false` otherwise.
+##### `auth.tryAuth`
+Attempts to authenticate the specified user while failing gracefully.
 
 ##### Arguments
 `req`
-An Express-like request object
+An Express-like request object for HTTP invocations; `null` otherwise.
 
 `res`
-An Express-like response object
+An Express-like response object for HTTP invocations; `null` otherwise.
 
 `userId`
 _Datastore token-storage only._ A unique User ID specifying which user to associate the token with.
+
+##### Returns
+`true` if the authentication succeeded, `false` otherwise.
+
+##### `auth.requireAuth`
+Attempts to authenticate the specified user, but does _not_ fail gracefully.
+
+##### Arguments
+`req`
+An Express-like request object for HTTP invocations; `null` otherwise.
+
+`res`
+An Express-like response object for HTTP invocations; `null` otherwise.
+
+`userId`
+_Datastore token-storage only._ A unique User ID specifying which user to associate the token with.
+
+##### Returns
+A `Promise` containing a scoped token if the authentication succeeds; a rejected `Promise` containing an `Error` otherwise.
 
 ##### `auth.authedUser.hasScope`
 Check if the authenticated user's token contains a specified OAuth 2.0 scope.
 
 ##### Arguments
 `req`
-An Express-like request object
+An Express-like request object for HTTP invocations; `null` otherwise.
 
 `res`
-An Express-like response object
+An Express-like response object for HTTP invocations; `null` otherwise.
 
 `scope`
 The OAuth 2.0 scope to check for
@@ -112,10 +135,10 @@ Retrieves the current user's (initialized and auto-authenticated) OAuth 2.0 clie
 
 ##### Arguments
 `req`
-An Express-like request object
+An Express-like request object for HTTP invocations; `null` otherwise.
 
 `res`
-An Express-like response object
+An Express-like response object for HTTP invocations; `null` otherwise.
 
 `userId`
 _Datastore token-storage only._ A unique User ID specifying which user the auth client will associate with.
@@ -128,10 +151,10 @@ Retrieves the standard _non-scoped_ OAuth 2.0 token associated with the specifie
 
 ##### Arguments
 `req`
-An Express-like request object
+An Express-like request object for HTTP invocations; `null` otherwise.
 
 `res`
-An Express-like response object
+An Express-like response object for HTTP invocations; `null` otherwise.
 
 `userId`
 _Datastore token-storage only._ A unique User ID specifying which user's non-scoped token should be fetched.
@@ -139,28 +162,41 @@ _Datastore token-storage only._ A unique User ID specifying which user's non-sco
 ##### Returns
 A `Promise` containing the currently-authenticated user's OAuth 2.0 token.
 
+##### `auth.getRawClient`
+**Internal.** Retrieves a reference to an unauthenticated OAuth 2.0 client object.
+
+##### Arguments
+`req`
+An Express-like request object for HTTP invocations; `null` otherwise.
+
+`res`
+An Express-like response object for HTTP invocations; `null` otherwise.
+
+##### Returns
+A `Promise` that resolves to the unauthenticated OAuth 2.0 client object.
+
 ##### `auth.authedUser.getUserId`
 **Internal.** Returns the unique User ID of the currently authenticated user.
 
 ##### Arguments
 `req`
-An Express-like request object
+An Express-like request object for HTTP invocations; `null` otherwise.
 
 `res`
-An Express-like response object
+An Express-like response object for HTTP invocations; `null` otherwise.
 
 ##### Returns
-A `Promise` containing the current user's GAIA ID or email address, depending on the value of [`USER_ID_FORMAT`](#USER-ID-FORMAT).
+A `Promise` containing the current user's Google user ID (`gaiaId`) or email address, depending on the value of [`USER_ID_FORMAT`](#USER-ID-FORMAT).
 
 ##### `auth.storeScopedToken`
 **Internal.** Stores a scoped token associated with the specified user.
 
 ##### Arguments
 `req`
-An Express-like request object
+An Express-like request object for HTTP invocations; `null` otherwise.
 
 `res`
-An Express-like response object
+An Express-like response object for HTTP invocations; `null` otherwise.
 
 `scopedToken`
 The scoped token to associate with the specified user.
@@ -169,17 +205,17 @@ The scoped token to associate with the specified user.
 _Datastore token-storage only._ A unique User ID specifying which user to associate the token with.
 
 ##### Returns
-A `Promise` that resolves once the scoped token has been stored.
+A `Promise` that resolves once the token is stored.
 
 ##### `auth.authedUser.getScopedToken`
 **Internal.** Retrieves the scoped token associated with the specified (and auto-authenticated) user.
 
 ##### Arguments
 `req`
-An Express-like request object
+An Express-like request object for HTTP invocations; `null` otherwise.
 
 `res`
-An Express-like response object
+An Express-like response object for HTTP invocations; `null` otherwise.
 
 `userId`
 _Datastore token-storage only._ A unique User ID specifying which user's scoped token should be fetched.
@@ -259,3 +295,4 @@ Support for this library is **not** guaranteed, and it may be abandoned, depreca
 
 ##### Contributing
 Pull requests and issues are very much appreciated. Please read through [`CONTRIBUTING.md`](CONTRIBUTING.md) before submitting your contribution.
+q

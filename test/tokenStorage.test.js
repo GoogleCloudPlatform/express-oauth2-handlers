@@ -1,5 +1,5 @@
 /**
- * Copyright 2018 Google LLC.
+ * Copyright 2019 Google LLC.
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -19,13 +19,18 @@ const proxyquire = require(`proxyquire`)
   .noPreserveCache()
   .noCallThru();
 
-function getSample(datastoreResult, cookieResult, expiryDate) {
+function getSample(datastoreResult, cookieResult, expiryDate, triggerType) {
   expiryDate = expiryDate || new Date(8640000000000000);
+  triggerType = triggerType || 'HTTP_TRIGGER';
 
   const datastoreMock = {
     key: sinon.stub().returnsArg(0),
     save: sinon.stub().resolves(),
     get: sinon.stub().resolves(datastoreResult),
+  };
+
+  const DatastoreMock = {
+    Datastore: sinon.stub().returns(datastoreMock),
   };
 
   const reqMock = {
@@ -50,6 +55,8 @@ function getSample(datastoreResult, cookieResult, expiryDate) {
     ERROR_USERID_FORMAT: 'error_userid_format',
     ERROR_USERID_SCOPES: 'error_userid_scopes',
     ERROR_NOT_AUTHED: 'error_not_authed',
+    ERROR_HTTP_ONLY: 'error_http_only',
+    ERROR_NEEDS_REQ_RES: 'error_needs_req_res',
   };
   configMock.NEEDS_USER_ID = configMock.STORAGE_METHOD === 'datastore';
 
@@ -64,13 +71,19 @@ function getSample(datastoreResult, cookieResult, expiryDate) {
     OAuth2Client: sinon.stub().returns(oauth2ClientMock),
   };
 
+  const oauth2DataMock = {
+    data: {
+      email: 'email',
+      id: 600613,
+    },
+  };
+
   const oauth2ApiMock = {
-    v2: {
-      me: {
-        get: sinon.stub().yields(null, {
-          email: 'email',
-          id: 600613,
-        }),
+    userinfo: {
+      v2: {
+        me: {
+          get: sinon.stub().yields(null, oauth2DataMock),
+        },
       },
     },
   };
@@ -81,11 +94,18 @@ function getSample(datastoreResult, cookieResult, expiryDate) {
     },
   };
 
+  const processMock = {
+    env: {
+      FUNCTION_TRIGGER_TYPE: triggerType,
+    },
+  };
+
   return {
     program: proxyquire('../tokenStorage', {
-      '@google-cloud/datastore': datastoreMock,
+      '@google-cloud/datastore': DatastoreMock,
       './config': configMock,
       'google-auth-library': googleAuthMock,
+      process: processMock,
       googleapis: googleapisMock,
     }),
     mocks: {
@@ -95,6 +115,7 @@ function getSample(datastoreResult, cookieResult, expiryDate) {
       oauth2Client: oauth2ClientMock,
       req: reqMock,
       res: resMock,
+      process: processMock,
     },
   };
 }
@@ -404,9 +425,7 @@ test('getAuthedUserId succeeds with valid userId formats', async t => {
   await program.getAuthedClient(mocks.req, mocks.res, userId); // Authenticate
   t.true(mocks.oauth2Client.refreshAccessToken.calledOnce);
 
-  await t.notThrowsAsync(() => {
-    return program.getAuthedUserId(mocks.req, mocks.res, token);
-  });
+  await t.notThrowsAsync(program.getAuthedUserId(mocks.req, mocks.res, token));
 });
 
 test('authedUserHasScope checks if a user has a given scope', async t => {
@@ -435,19 +454,19 @@ test('authedUserHasScope checks if a user has a given scope', async t => {
   t.false(excludedScope);
 });
 
-test('canAuth auto-auths and returns true if it succeeds', async t => {
+test('tryAuth auto-auths and returns true if it succeeds', async t => {
   const token = {
     scopes: [],
     token: {},
   };
   const {program, mocks} = getSample([token], null, Date.now());
 
-  const result = await program.canAuth(mocks.req, mocks.res, 'foo');
+  const result = await program.tryAuth(mocks.req, mocks.res, 'foo');
   t.true(result);
   t.true(mocks.oauth2Client.refreshAccessToken.calledOnce);
 });
 
-test('canAuth returns true if already authenticated', async t => {
+test('tryAuth returns true if already authenticated', async t => {
   const token = {
     scopes: [],
     token: {},
@@ -457,17 +476,88 @@ test('canAuth returns true if already authenticated', async t => {
   await program.getAuthedClient(mocks.req, mocks.res, 'foo');
   t.true(mocks.oauth2Client.refreshAccessToken.calledOnce);
 
-  const result = await program.canAuth(mocks.req, mocks.res, 'foo');
+  const result = await program.tryAuth(mocks.req, mocks.res, 'foo');
   t.true(result);
 });
 
-test('canAuth returns false if auth fails', async t => {
+test('tryAuth returns false if auth fails', async t => {
   const {program, mocks} = getSample(null);
   mocks.config.STORAGE_METHOD = 'datastore'; // Nonexistent user
 
-  const call = program.canAuth(mocks.req, mocks.res, 'foo');
+  const call = program.tryAuth(mocks.req, mocks.res, 'foo');
   await t.notThrowsAsync(call);
 
   const result = await call;
   t.false(result);
+});
+
+test('tryAuth auto-auths correctly', async t => {
+  const token = {
+    scopes: [],
+    token: {},
+  };
+  const {program, mocks} = getSample([token], null, Date.now());
+
+  await t.notThrowsAsync(() => {
+    return program.requireAuth(mocks.req, mocks.res, 'foo');
+  });
+  t.true(mocks.oauth2Client.refreshAccessToken.calledOnce);
+});
+
+test('requireAuth throws an error if auth fails', async t => {
+  const {program, mocks} = getSample(null);
+  mocks.config.STORAGE_METHOD = 'datastore'; // Nonexistent user
+
+  await t.throwsAsync(program.requireAuth(mocks.req, mocks.res, 'foo'));
+});
+
+test('should demand (and use) "req" and "res" values in HTTP mode', async t => {
+  const token = {
+    scopes: ['email'],
+    token: {},
+  };
+
+  const {program, mocks} = getSample([token], null, null, 'HTTP_TRIGGER');
+
+  const call = program.requireAuth(mocks.req, mocks.res, 'foo');
+  await t.notThrowsAsync(call);
+
+  t.truthy(mocks.res.locals.magicalAuth);
+
+  await t.throwsAsync(
+    program.getAuthedUserId(null, null),
+    'error_needs_req_res'
+  );
+  await t.notThrowsAsync(program.getAuthedUserId(mocks.req, mocks.res));
+});
+
+test('should not use "req" and "res" globals in non-HTTP mode', async t => {
+  const token = {
+    scopes: ['email'],
+    token: {},
+  };
+
+  const {program} = getSample([token], null, null, 'PUBSUB_TRIGGER');
+
+  await t.notThrowsAsync(program.requireAuth(null, null, 'foo'));
+  await t.notThrowsAsync(program.getAuthedUserId(null, null));
+});
+
+test('should not allow cookies in non-HTTP mode', async t => {
+  const tokenStr = JSON.stringify({
+    scopes: [],
+    token: {},
+  });
+
+  const {program} = getSample(
+    null,
+    `oauth2token=${tokenStr}`,
+    null,
+    'PUBSUB_TRIGGER'
+  );
+
+  await t.throwsAsync(
+    program.requireAuth(null, null, 'foo'),
+    'error_storage_method'
+  );
 });

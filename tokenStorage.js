@@ -1,5 +1,5 @@
 /**
- * Copyright 2018 Google LLC.
+ * Copyright 2019 Google LLC.
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -13,15 +13,40 @@
  * limitations under the License.
  */
 
+const process = require('process'); // Makes it proxyquire-able
+
 const cookie = require('cookie');
-const pify = require('pify');
+const sinon = require('sinon');
 
 const config = require('./config');
-const datastore = require('@google-cloud/datastore');
+const {Datastore} = require('@google-cloud/datastore');
+const datastore = new Datastore();
+
 const {OAuth2Client} = require('google-auth-library');
 
 const googleapis = require('googleapis');
 const OAuth2Api = googleapis.oauth2_v2.Oauth2;
+
+// Global request/response mocks - ONLY for use in GCF w/non-HTTP triggers
+// (GAE shares globals between requests => MAJOR security issue)
+const stubNeedsReqRes = sinon
+  .stub()
+  .throws(new Error(config.ERROR_NEEDS_REQ_RES));
+let GLOBAL_REQ = null;
+let GLOBAL_RES = {
+  cookie: stubNeedsReqRes,
+  status: stubNeedsReqRes,
+  send: stubNeedsReqRes,
+  end: stubNeedsReqRes,
+};
+
+const __triggerType = process.env.FUNCTION_TRIGGER_TYPE;
+const IS_HTTP = !__triggerType || __triggerType.toLowerCase().includes('http');
+
+if (!IS_HTTP) {
+  GLOBAL_REQ = {};
+  GLOBAL_RES.locals = {};
+}
 
 // GAE doesn't support per-concurrent-user globals, so use res.locals as
 // our cache instead. Inefficient for GCF though, which is zero-concurrency.
@@ -83,12 +108,11 @@ const __validateOrRefreshToken = (req, res, scopedToken, userId) => {
         });
       });
     }).then(newScopedToken => {
-      __cacheSet(res, 'scopedToken', newScopedToken);
+      __setLocalScopedToken(req, res, newScopedToken);
       return __storeScopedToken(req, res, newScopedToken, userId);
     });
   } else {
-    oauth2client.credentials = token;
-    __cacheSet(res, 'scopedToken', scopedToken);
+    __setLocalScopedToken(req, res, scopedToken);
     return Promise.resolve(scopedToken);
   }
 };
@@ -108,7 +132,7 @@ const __storeScopedToken = (req, res, scopedToken, userId) => {
       key: datastore.key(['oauth2token', userId]),
       data: scopedToken,
     });
-  } else if (config.STORAGE_METHOD === 'cookie') {
+  } else if (config.STORAGE_METHOD === 'cookie' && IS_HTTP) {
     // User ID not required
     res.cookie('oauth2token', JSON.stringify(scopedToken));
     return Promise.resolve();
@@ -133,7 +157,7 @@ const __authenticate = (req, res, userId) => {
       .then(tokens => {
         return __validateOrRefreshToken(req, res, tokens[0], userId);
       });
-  } else if (config.STORAGE_METHOD === 'cookie') {
+  } else if (config.STORAGE_METHOD === 'cookie' && IS_HTTP) {
     const scopedToken = JSON.parse(
       cookie.parse(req.headers.cookie)['oauth2token'] || null
     );
@@ -196,13 +220,22 @@ const __getAuthedUserId = (req, res) => {
       ) {
         const oauth2api = new OAuth2Api('v2');
 
-        return pify(oauth2api.v2.me.get)({
-          auth: __getOAuth2Client(res),
-          userId: 'me',
-        }).then(data => {
-          const id = config.USER_ID_FORMAT === 'email' ? data.email : data.id;
-          __cacheSet(res, 'userId', id);
-          return Promise.resolve(id);
+        return new Promise((resolve, reject) => {
+          oauth2api.userinfo.v2.me.get(
+            {auth: __getOAuth2Client(res)},
+            (err, data) => {
+              if (err) {
+                return reject(err);
+              }
+
+              const id =
+                config.USER_ID_FORMAT === 'email'
+                  ? data.data.email
+                  : data.data.id;
+              __cacheSet(res, 'userId', id);
+              return resolve(id);
+            }
+          );
         });
       } else {
         return Promise.reject(new Error(config.ERROR_USERID_FORMAT));
@@ -210,8 +243,63 @@ const __getAuthedUserId = (req, res) => {
     });
 };
 
-/* Library exports (for code clarity/cleanliness) */
-exports.canAuth = (req, res, userId) => {
+// Set local scoped token, without validation
+// Validation requires a userId, which these tokens don't (yet) have
+const __setLocalScopedToken = (req, res, scopedToken) => {
+  __cacheSet(res, 'scopedToken', scopedToken);
+  __getOAuth2Client(res).credentials = scopedToken.token;
+};
+
+/* Exported internal methods */
+/* Used elsewhere in the library, not (really) intended for consumer use */
+exports.setLocalScopedToken = (req, res, scopedToken) => {
+  if (!IS_HTTP) {
+    req = req || GLOBAL_REQ;
+    res = res || GLOBAL_RES;
+  } else if (!req || !res) {
+    return Promise.reject(new Error(config.ERROR_NEEDS_REQ_RES));
+  }
+
+  return __setLocalScopedToken(req, res, scopedToken);
+};
+
+exports.getUnauthedClient = (req, res) => {
+  if (!IS_HTTP) {
+    req = req || GLOBAL_REQ;
+    res = res || GLOBAL_RES;
+  } else if (!req || !res) {
+    return Promise.reject(new Error(config.ERROR_NEEDS_REQ_RES));
+  }
+
+  return __getOAuth2Client(res, 'client');
+};
+
+exports.storeScopedToken = async (req, res, scopedToken, userId) => {
+  if (!IS_HTTP) {
+    req = req || GLOBAL_REQ;
+    res = res || GLOBAL_RES;
+  } else if (!req || !res) {
+    return Promise.reject(new Error(config.ERROR_NEEDS_REQ_RES));
+  }
+
+  return __storeScopedToken(req, res, scopedToken, userId);
+};
+
+exports.getAuthedScopedToken = (req, res, userId) => {
+  if (!IS_HTTP) {
+    req = req || GLOBAL_REQ;
+    res = res || GLOBAL_RES;
+  } else if (!req || !res) {
+    return Promise.reject(new Error(config.ERROR_NEEDS_REQ_RES));
+  }
+
+  return __requireAnyAuth(req, res, userId).then(() => {
+    return __cacheGet(res, 'scopedToken');
+  });
+};
+
+/* Consumer library exports (for code clarity/cleanliness) */
+exports.tryAuth = (req, res, userId) => {
   return __requireAnyAuth(req, res, userId)
     .then(() => {
       return Promise.resolve(true);
@@ -221,32 +309,61 @@ exports.canAuth = (req, res, userId) => {
     });
 };
 
+exports.requireAuth = (req, res, userId) => {
+  if (!IS_HTTP) {
+    req = req || GLOBAL_REQ;
+    res = res || GLOBAL_RES;
+  } else if (!req || !res) {
+    return Promise.reject(new Error(config.ERROR_NEEDS_REQ_RES));
+  }
+
+  return __requireAnyAuth(req, res, userId);
+};
+
 exports.getAuthedClient = async (req, res, userId) => {
+  if (!IS_HTTP) {
+    req = req || GLOBAL_REQ;
+    res = res || GLOBAL_RES;
+  } else if (!req || !res) {
+    return Promise.reject(new Error(config.ERROR_NEEDS_REQ_RES));
+  }
+
   return __requireAnyAuth(req, res, userId).then(() => {
     return __cacheGet(res, 'client');
   });
 };
 
 exports.getAuthedUserId = (req, res) => {
+  if (!IS_HTTP) {
+    req = req || GLOBAL_REQ;
+    res = res || GLOBAL_RES;
+  } else if (!req || !res) {
+    return Promise.reject(new Error(config.ERROR_NEEDS_REQ_RES));
+  }
+
   return __getAuthedUserId(req, res);
 };
 
-exports.storeScopedToken = async (req, res, scopedToken, userId) => {
-  return __storeScopedToken(req, res, scopedToken, userId);
-};
-
-exports.getAuthedScopedToken = (req, res, userId) => {
-  return __requireAnyAuth(req, res, userId).then(() => {
-    return __cacheGet(res, 'scopedToken');
-  });
-};
-
 exports.getAuthedToken = (req, res, userId) => {
+  if (!IS_HTTP) {
+    req = req || GLOBAL_REQ;
+    res = res || GLOBAL_RES;
+  } else if (!req || !res) {
+    return Promise.reject(new Error(config.ERROR_NEEDS_REQ_RES));
+  }
+
   return __requireAnyAuth(req, res, userId).then(() => {
     return __cacheGet(res, 'scopedToken').token;
   });
 };
 
 exports.authedUserHasScope = (req, res, scope) => {
+  if (!IS_HTTP) {
+    req = req || GLOBAL_REQ;
+    res = res || GLOBAL_RES;
+  } else if (!req || !res) {
+    return Promise.reject(new Error(config.ERROR_NEEDS_REQ_RES));
+  }
+
   return __authedUserHasScope(req, res, scope);
 };

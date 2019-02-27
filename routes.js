@@ -1,5 +1,5 @@
 /**
- * Copyright 2018 Google LLC.
+ * Copyright 2019 Google LLC.
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -22,7 +22,7 @@ const __isExpressCall = (arg1, arg2) =>
 exports.init = (arg1, arg2, arg3) => {
   const handler = (req, res, scopes, next) => {
     res.redirect(
-      tokenStorage.getClient().generateAuthUrl({
+      tokenStorage.getUnauthedClient(req, res).generateAuthUrl({
         access_type: 'offline',
         scope: scopes,
         prompt: 'consent', // Needed so we receive a refresh token every time
@@ -47,11 +47,11 @@ exports.cb = (arg1, arg2, arg3) => {
 
   const handler = (req, res, next, onSuccess, onFailure) => {
     const code = req.query.code;
-    const scopes = req.query.scopes.split(' ');
+    const scopes = req.query.scope.split(' ');
 
     // OAuth2: Exchange authorization code for access token
     return new Promise((resolve, reject) => {
-      tokenStorage.getClient().getToken(code, (err, token) => {
+      tokenStorage.getUnauthedClient(req, res).getToken(code, (err, token) => {
         if (err) {
           return reject(err);
         }
@@ -59,24 +59,24 @@ exports.cb = (arg1, arg2, arg3) => {
       });
     })
       .then(token => {
+        const scopedToken = {token, scopes};
+        tokenStorage.setLocalScopedToken(req, res, scopedToken);
+        return Promise.resolve(scopedToken);
+      })
+      .then(scopedToken => {
         // Add user ID, if necessary
         if (config.NEEDS_USER_ID) {
-          return Promise.all([token, tokenStorage.getAuthedUserId(req, res)]);
+          return Promise.all([
+            scopedToken,
+            tokenStorage.getAuthedUserId(req, res),
+          ]);
         } else {
-          return Promise.resolve([token, null]);
+          return Promise.resolve([scopedToken, null]);
         }
       })
-      .then(([token, userId]) => {
+      .then(([scopedToken, userId]) => {
         // Store token
-        return tokenStorage.storeScopedToken(
-          req,
-          res,
-          {
-            scopes: scopes,
-            token: token,
-          },
-          userId
-        );
+        return tokenStorage.storeScopedToken(req, res, scopedToken, userId);
       })
       .then(() => {
         // Custom actions

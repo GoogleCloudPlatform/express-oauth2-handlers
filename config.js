@@ -1,5 +1,5 @@
 /**
- * Copyright 2018 Google LLC.
+ * Copyright 2019 Google LLC.
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -27,6 +27,8 @@ nconf
 
 /* Automatic secret discovery */
 const secretPath = path.join(path.dirname(__dirname), 'client_secret.json');
+console.log(`Searching for secrets in: ${secretPath}`);
+
 const fs = require('fs');
 if (fs.existsSync(secretPath)) {
   const contents = JSON.parse(fs.readFileSync(secretPath))['web'];
@@ -69,7 +71,7 @@ exports.NEEDS_USER_ID = exports.STORAGE_METHOD === 'datastore';
 /* Errors */
 exports.ERROR_UNKNOWN_USER = 'User referenced by user ID has not registered.';
 exports.ERROR_STORAGE_METHOD =
-  'Unknown STORAGE_METHOD value. Must be "cookie" or "datastore"';
+  'Unknown or unsupported STORAGE_METHOD value. Must be "datastore" or "cookie", and "cookie" can only works in HTTP contexts.';
 exports.ERROR_NEEDS_USERID =
   'A userId is required to store tokens in datastore.';
 exports.ERROR_CALLBACK_ARG_TYPES =
@@ -81,3 +83,7 @@ exports.ERROR_USERID_FORMAT =
 exports.ERROR_USERID_SCOPES =
   'Using an email address or GAIA ID as user IDs requires adding the "profile" or "email" scopes.';
 exports.ERROR_NOT_AUTHED = 'A user must be authenticated to use this method';
+exports.ERROR_HTTP_ONLY =
+  'This functionality is only supported when using HTTP(S).';
+exports.ERROR_NEEDS_REQ_RES =
+  'Please pass Express\' "req" and "res" objects to this function when using HTTP(S).';
