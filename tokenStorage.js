@@ -13,58 +13,18 @@
  * limitations under the License.
  */
 
-const process = require('process'); // Makes it proxyquire-able
-
 const cookie = require('cookie');
-const sinon = require('sinon');
-
 const config = require('./config');
 const {Datastore} = require('@google-cloud/datastore');
+const {OAuth2Client} = require('google-auth-library');
+const OAuth2Api = require('googleapis').oauth2_v2.Oauth2;
+
+const {__wrapReqRes, __cacheGet, __cacheSet} = require('./miscHelpers');
 const datastore = new Datastore();
 
-const {OAuth2Client} = require('google-auth-library');
-
-const googleapis = require('googleapis');
-const OAuth2Api = googleapis.oauth2_v2.Oauth2;
-
-// Global request/response mocks - ONLY for use in GCF w/non-HTTP triggers
-// (GAE shares globals between requests => MAJOR security issue)
-const stubNeedsReqRes = sinon
-  .stub()
-  .throws(new Error(config.ERROR_NEEDS_REQ_RES));
-let GLOBAL_REQ = null;
-let GLOBAL_RES = {
-  cookie: stubNeedsReqRes,
-  status: stubNeedsReqRes,
-  send: stubNeedsReqRes,
-  end: stubNeedsReqRes,
-};
-
-const __triggerType = process.env.FUNCTION_TRIGGER_TYPE;
-const IS_HTTP = !__triggerType || __triggerType.toLowerCase().includes('http');
-
-if (!IS_HTTP) {
-  GLOBAL_REQ = {};
-  GLOBAL_RES.locals = {};
-}
-
-// GAE doesn't support per-concurrent-user globals, so use res.locals as
-// our cache instead. Inefficient for GCF though, which is zero-concurrency.
-const __cacheGet = (res, key) => {
-  return res.locals.magicalAuth && res.locals.magicalAuth[key];
-};
-
-const __cacheSet = (res, key, value) => {
-  if (!res.locals.magicalAuth) {
-    res.locals.magicalAuth = {};
-  }
-  res.locals.magicalAuth[key] = value;
-  return value;
-};
-
-const __getOAuth2Client = res => {
-  if (__cacheGet(res, 'client')) {
-    return __cacheGet(res, 'client');
+const __getOAuth2Client = (req, res) => {
+  if (__cacheGet(req, res, 'client')) {
+    return __cacheGet(req, res, 'client');
   }
 
   const client = new OAuth2Client(
@@ -72,7 +32,7 @@ const __getOAuth2Client = res => {
     config.GOOGLE_CLIENT_SECRET,
     config.GOOGLE_CALLBACK_URL
   );
-  __cacheSet(res, 'client', client);
+  __cacheSet(req, res, 'client', client);
   return client;
 };
 
@@ -89,24 +49,18 @@ const __validateOrRefreshToken = (req, res, scopedToken, userId) => {
     return Promise.reject(new Error(config.ERROR_SCOPED_ONLY));
   }
 
-  const token = scopedToken.token;
-  const oauth2client = __getOAuth2Client(res);
+  const {token, scopes} = scopedToken;
+  const oauth2client = __getOAuth2Client(req, res);
 
   if (!token.expiry_date || token.expiry_date < Date.now() + 60000) {
     // Refresh token
-    oauth2client.credentials.refresh_token =
-      oauth2client.credentials.refresh_token || token.refresh_token;
+    const creds = oauth2client.credentials; // by-reference assignment
+    creds.refresh_token = creds.refresh_token || token.refresh_token;
     return new Promise((resolve, reject) => {
-      // Pify and oauth2client don't mix
-      oauth2client.refreshAccessToken(err => {
-        if (err) {
-          return reject(new Error(err));
-        }
-        return resolve({
-          scopes: scopedToken.scopes,
-          token: oauth2client.credentials,
-        });
-      });
+      // oauth2client doesn't like Pify
+      oauth2client.refreshAccessToken(err =>
+        err ? reject(new Error(err)) : resolve({scopes, token: creds})
+      );
     }).then(newScopedToken => {
       __setLocalScopedToken(req, res, newScopedToken);
       return __storeScopedToken(req, res, newScopedToken, userId);
@@ -118,12 +72,11 @@ const __validateOrRefreshToken = (req, res, scopedToken, userId) => {
 };
 
 const __storeScopedToken = (req, res, scopedToken, userId) => {
-  // Data validation
-  if (!__isScopedToken(scopedToken)) {
-    return Promise.reject(new Error(config.ERROR_SCOPED_ONLY));
-  }
   if (config.NEEDS_USER_ID && !userId) {
     return Promise.reject(new Error(config.ERROR_NEEDS_USERID));
+  }
+  if (!__isScopedToken(scopedToken)) {
+    return Promise.reject(new Error(config.ERROR_SCOPED_ONLY));
   }
 
   // Store token
@@ -132,7 +85,7 @@ const __storeScopedToken = (req, res, scopedToken, userId) => {
       key: datastore.key(['oauth2token', userId]),
       data: scopedToken,
     });
-  } else if (config.STORAGE_METHOD === 'cookie' && IS_HTTP) {
+  } else if (config.STORAGE_METHOD === 'cookie' && config.IS_HTTP) {
     // User ID not required
     res.cookie('oauth2token', JSON.stringify(scopedToken));
     return Promise.resolve();
@@ -142,8 +95,8 @@ const __storeScopedToken = (req, res, scopedToken, userId) => {
 };
 
 const __authenticate = (req, res, userId) => {
-  if (__cacheGet(res, 'scopedToken')) {
-    return Promise.resolve(__cacheGet(res, 'scopedToken'));
+  if (__cacheGet(req, res, 'scopedToken')) {
+    return Promise.resolve(__cacheGet(req, res, 'scopedToken'));
   }
 
   if (config.NEEDS_USER_ID && !userId) {
@@ -157,7 +110,7 @@ const __authenticate = (req, res, userId) => {
       .then(tokens => {
         return __validateOrRefreshToken(req, res, tokens[0], userId);
       });
-  } else if (config.STORAGE_METHOD === 'cookie' && IS_HTTP) {
+  } else if (config.STORAGE_METHOD === 'cookie' && config.IS_HTTP) {
     const scopedToken = JSON.parse(
       cookie.parse(req.headers.cookie)['oauth2token'] || null
     );
@@ -167,37 +120,29 @@ const __authenticate = (req, res, userId) => {
   }
 };
 
-const __requireExistingAuth = (req, res) => {
-  if (!__isAuthed(req, res)) {
-    return Promise.reject(new Error(config.ERROR_NOT_AUTHED));
-  } else {
-    return Promise.resolve(); // success
-  }
-};
+const __requireExistingAuth = (req, res) =>
+  !__isAuthed(req, res)
+    ? Promise.reject(new Error(config.ERROR_NOT_AUTHED))
+    : Promise.resolve();
 
-const __requireAnyAuth = async (req, res, userId) => {
-  if (!__isAuthed(req, res)) {
-    return __authenticate(req, res, userId);
-  } else {
-    return Promise.resolve();
-  }
-};
+const __requireAnyAuth = async (req, res, userId) =>
+  !__isAuthed(req, res) ? __authenticate(req, res, userId) : Promise.resolve();
 
 const __isAuthed = (req, res) => {
-  return !!__cacheGet(res, 'scopedToken');
+  return !!__cacheGet(req, res, 'scopedToken');
 };
 
 const __authedUserHasScope = (req, res, scope) => {
   return __requireExistingAuth(req, res).then(() => {
-    return __cacheGet(res, 'scopedToken').scopes.includes(scope);
+    return __cacheGet(req, res, 'scopedToken').scopes.includes(scope);
   });
 };
 
 const __getAuthedUserId = (req, res) => {
   return __requireExistingAuth(req, res)
     .then(() => {
-      if (__cacheGet(res, 'userId')) {
-        return Promise.resolve(__cacheGet(res, 'userId'));
+      if (__cacheGet(req, res, 'userId')) {
+        return Promise.resolve(__cacheGet(req, res, 'userId'));
       }
 
       // Verify necessary scopes are present
@@ -214,25 +159,20 @@ const __getAuthedUserId = (req, res) => {
       }
     })
     .then(() => {
-      if (
-        config.USER_ID_FORMAT === 'email' ||
-        config.USER_ID_FORMAT === 'gaiaId'
-      ) {
+      const idFormat = config.USER_ID_FORMAT;
+      if (['email', 'gaiaId'].includes(idFormat)) {
         const oauth2api = new OAuth2Api('v2');
 
         return new Promise((resolve, reject) => {
           oauth2api.userinfo.v2.me.get(
-            {auth: __getOAuth2Client(res)},
-            (err, data) => {
+            {auth: __getOAuth2Client(req, res)},
+            (err, {data}) => {
               if (err) {
                 return reject(err);
               }
 
-              const id =
-                config.USER_ID_FORMAT === 'email'
-                  ? data.data.email
-                  : data.data.id;
-              __cacheSet(res, 'userId', id);
+              const id = idFormat === 'email' ? data.email : data.id;
+              __cacheSet(req, res, 'userId', id);
               return resolve(id);
             }
           );
@@ -246,124 +186,51 @@ const __getAuthedUserId = (req, res) => {
 // Set local scoped token, without validation
 // Validation requires a userId, which these tokens don't (yet) have
 const __setLocalScopedToken = (req, res, scopedToken) => {
-  __cacheSet(res, 'scopedToken', scopedToken);
-  __getOAuth2Client(res).credentials = scopedToken.token;
+  __cacheSet(req, res, 'scopedToken', scopedToken);
+  __getOAuth2Client(req, res).credentials = scopedToken.token;
 };
 
 /* Exported internal methods */
 /* Used elsewhere in the library, not (really) intended for consumer use */
-exports.setLocalScopedToken = (req, res, scopedToken) => {
-  if (!IS_HTTP) {
-    req = req || GLOBAL_REQ;
-    res = res || GLOBAL_RES;
-  } else if (!req || !res) {
-    return Promise.reject(new Error(config.ERROR_NEEDS_REQ_RES));
-  }
+exports.setLocalScopedToken = (req, res, scopedToken) =>
+  __wrapReqRes(__setLocalScopedToken)(req, res, scopedToken);
 
-  return __setLocalScopedToken(req, res, scopedToken);
-};
+exports.getUnauthedClient = (req, res) =>
+  __wrapReqRes(__getOAuth2Client)(req, res);
 
-exports.getUnauthedClient = (req, res) => {
-  if (!IS_HTTP) {
-    req = req || GLOBAL_REQ;
-    res = res || GLOBAL_RES;
-  } else if (!req || !res) {
-    return Promise.reject(new Error(config.ERROR_NEEDS_REQ_RES));
-  }
+exports.storeScopedToken = async (req, res, scopedToken, userId) =>
+  __wrapReqRes(__storeScopedToken)(req, res, scopedToken, userId);
 
-  return __getOAuth2Client(res, 'client');
-};
-
-exports.storeScopedToken = async (req, res, scopedToken, userId) => {
-  if (!IS_HTTP) {
-    req = req || GLOBAL_REQ;
-    res = res || GLOBAL_RES;
-  } else if (!req || !res) {
-    return Promise.reject(new Error(config.ERROR_NEEDS_REQ_RES));
-  }
-
-  return __storeScopedToken(req, res, scopedToken, userId);
-};
-
-exports.getAuthedScopedToken = (req, res, userId) => {
-  if (!IS_HTTP) {
-    req = req || GLOBAL_REQ;
-    res = res || GLOBAL_RES;
-  } else if (!req || !res) {
-    return Promise.reject(new Error(config.ERROR_NEEDS_REQ_RES));
-  }
-
+exports.getAuthedScopedToken = __wrapReqRes((req, res, userId) => {
   return __requireAnyAuth(req, res, userId).then(() => {
-    return __cacheGet(res, 'scopedToken');
+    return __cacheGet(req, res, 'scopedToken');
   });
-};
+});
 
 /* Consumer library exports (for code clarity/cleanliness) */
 exports.tryAuth = (req, res, userId) => {
   return __requireAnyAuth(req, res, userId)
-    .then(() => {
-      return Promise.resolve(true);
-    })
-    .catch(() => {
-      return Promise.resolve(false);
-    });
+    .then(() => Promise.resolve(true))
+    .catch(() => Promise.resolve(false));
 };
 
-exports.requireAuth = (req, res, userId) => {
-  if (!IS_HTTP) {
-    req = req || GLOBAL_REQ;
-    res = res || GLOBAL_RES;
-  } else if (!req || !res) {
-    return Promise.reject(new Error(config.ERROR_NEEDS_REQ_RES));
-  }
+exports.requireAuth = (req, res, userId) =>
+  __wrapReqRes(__requireAnyAuth)(req, res, userId);
 
-  return __requireAnyAuth(req, res, userId);
-};
-
-exports.getAuthedClient = async (req, res, userId) => {
-  if (!IS_HTTP) {
-    req = req || GLOBAL_REQ;
-    res = res || GLOBAL_RES;
-  } else if (!req || !res) {
-    return Promise.reject(new Error(config.ERROR_NEEDS_REQ_RES));
-  }
-
+exports.getAuthedClient = __wrapReqRes(async (req, res, userId) => {
   return __requireAnyAuth(req, res, userId).then(() => {
-    return __cacheGet(res, 'client');
+    return __cacheGet(req, res, 'client');
   });
-};
+});
 
-exports.getAuthedUserId = (req, res) => {
-  if (!IS_HTTP) {
-    req = req || GLOBAL_REQ;
-    res = res || GLOBAL_RES;
-  } else if (!req || !res) {
-    return Promise.reject(new Error(config.ERROR_NEEDS_REQ_RES));
-  }
+exports.getAuthedUserId = (req, res) =>
+  __wrapReqRes(__getAuthedUserId)(req, res);
 
-  return __getAuthedUserId(req, res);
-};
-
-exports.getAuthedToken = (req, res, userId) => {
-  if (!IS_HTTP) {
-    req = req || GLOBAL_REQ;
-    res = res || GLOBAL_RES;
-  } else if (!req || !res) {
-    return Promise.reject(new Error(config.ERROR_NEEDS_REQ_RES));
-  }
-
+exports.getAuthedToken = __wrapReqRes((req, res, userId) => {
   return __requireAnyAuth(req, res, userId).then(() => {
-    return __cacheGet(res, 'scopedToken').token;
+    return __cacheGet(req, res, 'scopedToken').token;
   });
-};
+});
 
-exports.authedUserHasScope = (req, res, scope) => {
-  if (!IS_HTTP) {
-    req = req || GLOBAL_REQ;
-    res = res || GLOBAL_RES;
-  } else if (!req || !res) {
-    return Promise.reject(new Error(config.ERROR_NEEDS_REQ_RES));
-  }
-
-  return __authedUserHasScope(req, res, scope);
-};
+exports.authedUserHasScope = (req, res, scope) =>
+  __wrapReqRes(__authedUserHasScope)(req, res, scope);

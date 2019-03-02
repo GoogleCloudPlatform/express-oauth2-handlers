@@ -19,6 +19,8 @@ const config = require('./config');
 const __isExpressCall = (arg1, arg2) =>
   [arg1, arg2].every(x => typeof x === 'object');
 
+const isFuncOrStr = x => ['function', 'string'].includes(typeof x);
+
 exports.init = (arg1, arg2, arg3) => {
   const handler = (req, res, scopes, next) => {
     res.redirect(
@@ -43,75 +45,64 @@ exports.init = (arg1, arg2, arg3) => {
 };
 
 exports.cb = (arg1, arg2, arg3) => {
-  const isFuncOrStr = x => ['string', 'function'].includes(typeof x);
-
   const handler = (req, res, next, onSuccess, onFailure) => {
     const code = req.query.code;
     const scopes = req.query.scope.split(' ');
 
     // OAuth2: Exchange authorization code for access token
     return new Promise((resolve, reject) => {
-      tokenStorage.getUnauthedClient(req, res).getToken(code, (err, token) => {
-        if (err) {
-          return reject(err);
-        }
-        return resolve(token);
-      });
+      tokenStorage
+        .getUnauthedClient(req, res)
+        .getToken(code, (err, token) => (err ? reject(err) : resolve(token)));
     })
       .then(token => {
         const scopedToken = {token, scopes};
         tokenStorage.setLocalScopedToken(req, res, scopedToken);
         return Promise.resolve(scopedToken);
       })
-      .then(scopedToken => {
+      .then(scopedToken =>
         // Add user ID, if necessary
-        if (config.NEEDS_USER_ID) {
-          return Promise.all([
-            scopedToken,
-            tokenStorage.getAuthedUserId(req, res),
-          ]);
-        } else {
-          return Promise.resolve([scopedToken, null]);
-        }
-      })
-      .then(([scopedToken, userId]) => {
+        Promise.all([
+          scopedToken,
+          config.NEEDS_USER_ID ? tokenStorage.getAuthedUserId(req, res) : null,
+        ])
+      )
+      .then(([scopedToken, userId]) =>
         // Store token
-        return tokenStorage.storeScopedToken(req, res, scopedToken, userId);
-      })
+        tokenStorage.storeScopedToken(req, res, scopedToken, userId)
+      )
       .then(() => {
         // Custom actions
-        if (isFuncOrStr(onSuccess)) {
-          if (typeof onSuccess === 'function') {
+        switch (typeof onSuccess) {
+          case 'function':
             onSuccess(req, res);
-          } else {
+            break;
+          case 'string':
             res.redirect(onSuccess);
-          }
-        } else {
-          res.status(200).send();
+            break;
+          default:
+            res.status(200).send();
         }
 
         // Middleware emulation
-        if (typeof next === 'function') {
-          next();
-        }
+        typeof next === 'function' && next();
       })
       .catch(err => {
         console.log(err);
 
-        if (isFuncOrStr(onFailure)) {
-          if (typeof onFailure === 'function') {
+        switch (typeof onFailure) {
+          case 'function':
             onFailure(err, req, res);
-          } else {
+            break;
+          case 'string':
             res.redirect(onFailure);
-          }
-        } else {
-          res.status(500).send('Something went wrong, check the logs.');
+            break;
+          default:
+            res.status(500).send('Something went wrong, check the logs.');
         }
 
         // Middleware emulation
-        if (typeof next === 'function') {
-          next(err);
-        }
+        typeof next === 'function' && next(err);
       });
   };
 

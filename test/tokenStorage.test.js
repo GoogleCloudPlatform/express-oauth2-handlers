@@ -57,6 +57,7 @@ function getSample(datastoreResult, cookieResult, expiryDate, triggerType) {
     ERROR_NOT_AUTHED: 'error_not_authed',
     ERROR_HTTP_ONLY: 'error_http_only',
     ERROR_NEEDS_REQ_RES: 'error_needs_req_res',
+    IS_HTTP: triggerType.toLowerCase().includes('http'),
   };
   configMock.NEEDS_USER_ID = configMock.STORAGE_METHOD === 'datastore';
 
@@ -100,10 +101,15 @@ function getSample(datastoreResult, cookieResult, expiryDate, triggerType) {
     },
   };
 
+  const miscHelpersMock = proxyquire('../miscHelpers', {
+    './config': configMock,
+  });
+
   return {
     program: proxyquire('../tokenStorage', {
       '@google-cloud/datastore': DatastoreMock,
       './config': configMock,
+      './miscHelpers': miscHelpersMock,
       'google-auth-library': googleAuthMock,
       process: processMock,
       googleapis: googleapisMock,
@@ -123,7 +129,7 @@ function getSample(datastoreResult, cookieResult, expiryDate, triggerType) {
 const test = require('ava');
 
 /* Basic tests */
-test('storeScopedToken should store token using cookies', t => {
+test('storeScopedToken should store token using cookies', async t => {
   const {program, mocks} = getSample();
 
   const token = {
@@ -132,7 +138,7 @@ test('storeScopedToken should store token using cookies', t => {
   };
   const userId = uuid4();
 
-  program.storeScopedToken(mocks.req, mocks.res, token, userId);
+  await program.storeScopedToken(mocks.req, mocks.res, token, userId);
 
   t.true(mocks.res.cookie.calledOnce);
   t.true(mocks.datastore.save.notCalled);
@@ -142,7 +148,7 @@ test('storeScopedToken should store token using cookies', t => {
   ]);
 });
 
-test('storeScopedToken should store token using datastore', t => {
+test('storeScopedToken should store token using datastore', async t => {
   const {program, mocks} = getSample();
   mocks.config.STORAGE_METHOD = 'datastore';
 
@@ -152,7 +158,7 @@ test('storeScopedToken should store token using datastore', t => {
   };
   const userId = uuid4();
 
-  program.storeScopedToken(mocks.req, mocks.res, token, userId);
+  await program.storeScopedToken(mocks.req, mocks.res, token, userId);
 
   t.true(mocks.res.cookie.notCalled);
   t.true(mocks.datastore.save.calledOnce);
@@ -522,7 +528,7 @@ test('should demand (and use) "req" and "res" values in HTTP mode', async t => {
   const call = program.requireAuth(mocks.req, mocks.res, 'foo');
   await t.notThrowsAsync(call);
 
-  t.truthy(mocks.res.locals.magicalAuth);
+  t.truthy(mocks.res.locals.magicAuth);
 
   await t.throwsAsync(
     program.getAuthedUserId(null, null),

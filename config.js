@@ -67,6 +67,10 @@ exports.USER_ID_FORMAT = nconf.get('USER_ID_FORMAT');
 
 /* Computed values */
 exports.NEEDS_USER_ID = exports.STORAGE_METHOD === 'datastore';
+const __triggerType = process.env.FUNCTION_TRIGGER_TYPE;
+
+exports.IS_HTTP =
+  !__triggerType || __triggerType.toLowerCase().includes('http');
 
 /* Errors */
 exports.ERROR_UNKNOWN_USER = 'User referenced by user ID has not registered.';
