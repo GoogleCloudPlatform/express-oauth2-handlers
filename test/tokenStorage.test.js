@@ -145,6 +145,7 @@ test('storeScopedToken should store token using cookies', async t => {
   t.deepEqual(mocks.res.cookie.firstCall.args, [
     'oauth2token',
     JSON.stringify(token),
+    {secure: true},
   ]);
 });
 

@@ -87,7 +87,7 @@ const __storeScopedToken = (req, res, scopedToken, userId) => {
     });
   } else if (config.STORAGE_METHOD === 'cookie' && config.IS_HTTP) {
     // User ID not required
-    res.cookie('oauth2token', JSON.stringify(scopedToken));
+    res.cookie('oauth2token', JSON.stringify(scopedToken), {secure: true});
     return Promise.resolve();
   } else {
     return Promise.reject(new Error(config.ERROR_STORAGE_METHOD));

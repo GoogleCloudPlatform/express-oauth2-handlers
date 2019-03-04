@@ -33,6 +33,10 @@ Specify how OAuth 2.0 tokens will be stored. *Must* be one of the following valu
 - `cookie` Stores tokens on a _per-user basis_ using browser cookies.
 - `datastore` Stores tokens _globally_ using [Cloud Datastore](https://cloud.google.com/datastore).
 
+We recommend using `cookie` unless you have code running in a non-HTTP environment, as this delegates authentication to the user's browser.
+
+The `datastore` option is best when part or all of your code isn't triggered by HTTP. **However, you must manually verify the authenticity of all `datastore` requests yourself.**
+
 ###### `DEFAULT_SCOPES`
 A comma-separated list (such as `scope1,scope2,scope3`) of OAuth 2.0 scopes to use. See [this page](https://developers.google.com/identity/protocols/googlescopes) for a list of OAuth 2.0 scopes supported by Google APIs.
 
