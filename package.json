@@ -3,6 +3,9 @@
   "version": "0.0.1",
   "description": "A package that simplifies working with OAuth 2.0 tokens and ExpressJS on GCP",
   "main": "index.js",
+  "engines" : {
+    "node" : ">=8"
+  },
   "scripts": {
     "lint": "eslint *.js test/*.js",
     "test": "npm run lint && ava test/*.test.js",

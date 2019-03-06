@@ -35,7 +35,51 @@ test.serial('works without provided arguments', t => {
   });
 });
 
-test.serial('exports internal methods', t => {
+const getTruthyKeys = obj => {
+  return Object.keys(obj)
+    .filter(k => !!obj[k])
+    .sort();
+};
+
+test.serial('exports ALL default methods', t => {
+  const programInternal = program([], '', '', false);
+  t.deepEqual(getTruthyKeys(programInternal), ['auth', 'routes']);
+
+  t.deepEqual(getTruthyKeys(programInternal.auth), [
+    'authedUser',
+    'requireAuth',
+    'tryAuth',
+  ]);
+
+  t.deepEqual(getTruthyKeys(programInternal.auth.authedUser), [
+    'getClient',
+    'getToken',
+    'hasScope',
+  ]);
+});
+
+test.serial('exports ALL internal methods', t => {
+  const programExternal = program([], '', '', true);
+  t.deepEqual(getTruthyKeys(programExternal), ['auth', 'routes']);
+
+  t.deepEqual(getTruthyKeys(programExternal.auth), [
+    'authedUser',
+    'getRawClient',
+    'requireAuth',
+    'storeScopedToken',
+    'tryAuth',
+  ]);
+
+  t.deepEqual(getTruthyKeys(programExternal.auth.authedUser), [
+    'getClient',
+    'getScopedToken',
+    'getToken',
+    'getUserId',
+    'hasScope',
+  ]);
+});
+
+test.serial('exports internal methods correctly', t => {
   const programWithout = program([], '', '', false);
   t.falsy(programWithout.auth.storeScopedToken);
 

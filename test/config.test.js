@@ -15,11 +15,11 @@
 
 const test = require('ava');
 const sinon = require('sinon');
-const proxyquire = require('proxyquire').noPreserveCache();
+const proxyquire = require('proxyquire')
+  .noPreserveCache()
+  .noCallThru();
 
 test.beforeEach(() => {
-  delete require.cache[require.resolve('../config')];
-
   process.env.GOOGLE_CLIENT_ID = 'google_client_id';
   process.env.GOOGLE_CLIENT_SECRET = 'google_client_secret';
   process.env.GOOGLE_CALLBACK_URL = 'google_callback_url';
@@ -28,7 +28,11 @@ test.beforeEach(() => {
 test.serial('processes DEFAULT_SCOPES array as comma-separated string', t => {
   process.env.DEFAULT_SCOPES = 'a,b,c';
 
-  const config = require('../config');
+  const config = proxyquire('../config', {
+    fs: {
+      existsSync: sinon.stub().returns(false),
+    },
+  });
 
   t.deepEqual(config.DEFAULT_SCOPES, ['a', 'b', 'c']);
 });

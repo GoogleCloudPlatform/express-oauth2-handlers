@@ -32,9 +32,9 @@ module.exports = (storageMethod, scopes, userIdFormat, showInternals) => {
       tryAuth: tokenStorage.tryAuth,
       requireAuth: tokenStorage.requireAuth,
       authedUser: {
-        hasScope: tokenStorage.authedUserHasScope,
-        getClient: tokenStorage.getAuth,
+        getClient: tokenStorage.getAuthedClient,
         getToken: tokenStorage.getAuthedToken,
+        hasScope: tokenStorage.authedUserHasScope,
       },
     },
     routes: {
@@ -45,10 +45,10 @@ module.exports = (storageMethod, scopes, userIdFormat, showInternals) => {
 
   // Export internal methods (if asked to, in case someone needs these)
   if (showInternals) {
-    exported.auth.authedUser.getUserId = tokenStorage.getAuthedUserId;
     exported.auth.authedUser.getScopedToken = tokenStorage.getAuthedScopedToken;
-    exported.auth.storeScopedToken = tokenStorage.storeScopedToken;
+    exported.auth.authedUser.getUserId = tokenStorage.getAuthedUserId;
     exported.auth.getRawClient = tokenStorage.getUnauthedClient;
+    exported.auth.storeScopedToken = tokenStorage.storeScopedToken;
   }
 
   // Done!
