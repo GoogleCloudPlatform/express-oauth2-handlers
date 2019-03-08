@@ -15,6 +15,8 @@
 
 const sinon = require('sinon');
 const uuid4 = require('uuid/v4');
+const swapCase = require('swap-case');
+
 const proxyquire = require(`proxyquire`)
   .noPreserveCache()
   .noCallThru();
@@ -105,11 +107,25 @@ function getSample(datastoreResult, cookieResult, expiryDate, triggerType) {
     './config': configMock,
   });
 
+  const kmsMock = {
+    KeyManagementServiceClient: sinon.stub().returns({
+      cryptoKeyPath: sinon.stub().returns('key_path'),
+      decrypt: x => [swapCase(x.ciphertext || x.plaintext)],
+      encrypt: x => swapCase(x.ciphertext || x.plaintext),
+    }),
+  };
+
+  const kmsLibMock = proxyquire('../kmsLib', {
+    '@google-cloud/kms': kmsMock,
+    './config': configMock,
+  });
+
   return {
     program: proxyquire('../tokenStorage', {
       '@google-cloud/datastore': DatastoreMock,
       './config': configMock,
       './miscHelpers': miscHelpersMock,
+      './kmsLib': kmsLibMock,
       'google-auth-library': googleAuthMock,
       process: processMock,
       googleapis: googleapisMock,
@@ -129,44 +145,52 @@ function getSample(datastoreResult, cookieResult, expiryDate, triggerType) {
 const test = require('ava');
 
 /* Basic tests */
-test('storeScopedToken should store token using cookies', async t => {
+test('storeScopedToken should encrypt + store token using cookies', async t => {
   const {program, mocks} = getSample();
 
-  const token = {
-    token: uuid4(),
+  const inputToken = {
+    token: {a: 1},
+    scopes: [],
+  };
+  const outputToken = {
+    token: swapCase(JSON.stringify(inputToken.token)),
     scopes: [],
   };
   const userId = uuid4();
 
-  await program.storeScopedToken(mocks.req, mocks.res, token, userId);
+  await program.storeScopedToken(mocks.req, mocks.res, inputToken, userId);
 
   t.true(mocks.res.cookie.calledOnce);
   t.true(mocks.datastore.save.notCalled);
   t.deepEqual(mocks.res.cookie.firstCall.args, [
     'oauth2token',
-    JSON.stringify(token),
+    JSON.stringify(outputToken),
     {secure: true},
   ]);
 });
 
-test('storeScopedToken should store token using datastore', async t => {
+test('storeScopedToken should encrypt + store token using datastore', async t => {
   const {program, mocks} = getSample();
   mocks.config.STORAGE_METHOD = 'datastore';
 
-  const token = {
-    token: uuid4(),
+  const inputToken = {
+    token: {a: 1},
+    scopes: [],
+  };
+  const outputToken = {
+    token: swapCase(JSON.stringify(inputToken.token)),
     scopes: [],
   };
   const userId = uuid4();
 
-  await program.storeScopedToken(mocks.req, mocks.res, token, userId);
+  await program.storeScopedToken(mocks.req, mocks.res, inputToken, userId);
 
   t.true(mocks.res.cookie.notCalled);
   t.true(mocks.datastore.save.calledOnce);
   t.deepEqual(mocks.datastore.save.firstCall.args, [
     {
       key: ['oauth2token', userId],
-      data: token,
+      data: outputToken,
     },
   ]);
 });
@@ -187,48 +211,61 @@ test('storeScopedToken should fail if token is not a scopedToken', async t => {
 test('getAuthedClient should read token via cookies', async t => {
   const refreshToken = uuid4();
   const userId = uuid4();
-  const inputToken = {
-    token: {
-      expiry_date: new Date(8640000000000000).toString(),
-      refresh_token: refreshToken,
-    },
+
+  const encryptedToken = {
+    token: swapCase(
+      JSON.stringify({
+        expiry_date: new Date(8640000000000000).toString(),
+        refresh_token: refreshToken,
+      })
+    ),
     scopes: [],
   };
-  const inputCookie = `oauth2token=${JSON.stringify(inputToken)}`;
+  const decryptedToken = {
+    token: swapCase(encryptedToken.token),
+    scopes: encryptedToken.scopes,
+  };
+  const inputCookie = `oauth2token=${JSON.stringify(encryptedToken)}`;
 
   const {program, mocks} = getSample(null, inputCookie);
 
   const mockAuth = await program.getAuthedClient(mocks.req, mocks.res, userId);
 
   t.true(mocks.datastore.get.notCalled);
-  t.deepEqual(mockAuth.credentials, inputToken.token);
+  t.deepEqual(mockAuth.credentials, JSON.parse(decryptedToken.token));
 });
 
 test('getAuthedClient should read token via datastore', async t => {
   const refreshToken = uuid4();
   const userId = uuid4();
-  const inputToken = {
-    token: {
-      expiry_date: new Date(8640000000000000).toString(),
-      refresh_token: refreshToken,
-    },
+  const encryptedToken = {
+    token: swapCase(
+      JSON.stringify({
+        expiry_date: new Date(8640000000000000).toString(),
+        refresh_token: refreshToken,
+      })
+    ),
     scopes: [],
   };
+  const decryptedToken = {
+    token: swapCase(encryptedToken.token),
+    scopes: encryptedToken.scopes,
+  };
 
-  const {program, mocks} = getSample([inputToken]);
+  const {program, mocks} = getSample([encryptedToken]);
 
   const mockAuth = await program.getAuthedClient(mocks.req, mocks.res, userId);
 
   t.true(mocks.datastore.get.calledOnce);
   t.deepEqual(mocks.datastore.get.firstCall.args, [['oauth2token', userId]]);
-  t.deepEqual(mockAuth.credentials, inputToken.token);
+  t.deepEqual(mockAuth.credentials, JSON.parse(decryptedToken.token));
 });
 
 /* Edge cases */
 test('storeScopedToken should validate storage method', async t => {
   const token = {
     scopes: [],
-    token: {},
+    token: '{}',
   };
   const {program, mocks} = getSample();
   mocks.config.STORAGE_METHOD = 'foobar';
@@ -242,7 +279,7 @@ test('storeScopedToken should require userid for datastore', async t => {
   const {program, mocks} = getSample([]);
   const token = {
     scopes: [],
-    token: {},
+    token: '{}',
   };
 
   await t.throwsAsync(async () => {
@@ -277,14 +314,16 @@ test('getAuthClient should throw error for missing user with cookies', async t =
 test('getAuthClient should refresh out-of-date token', async t => {
   const refreshToken = uuid4();
   const userId = uuid4();
-  const inputToken = {
-    token: {
-      expiry_date: Date.now().toString(),
-      refresh_token: refreshToken,
-    },
+  const encryptedToken = {
+    token: swapCase(
+      JSON.stringify({
+        expiry_date: Date.now().toString(),
+        refresh_token: refreshToken,
+      })
+    ),
     scopes: [],
   };
-  const inputCookie = `oauth2token=${JSON.stringify(inputToken)}`;
+  const inputCookie = `oauth2token=${JSON.stringify(encryptedToken)}`;
 
   const {program, mocks} = getSample(null, inputCookie, Date.now());
 
@@ -298,7 +337,7 @@ test('getAuthClient should refresh out-of-date token', async t => {
 test('getAuthedClient auto-auths', async t => {
   const inputToken = {
     scopes: [],
-    token: {},
+    token: '{}',
   };
   const {program, mocks} = getSample([inputToken], null, Date.now());
 
@@ -310,7 +349,7 @@ test('getAuthedClient auto-auths', async t => {
 test('getAuthedUserId fails without auth (and does not auto-auth)', async t => {
   const inputToken = {
     scopes: [],
-    token: {},
+    token: '{}',
   };
 
   const {program, mocks} = getSample([inputToken], null, Date.now());
@@ -324,20 +363,28 @@ test('getAuthedUserId fails without auth (and does not auto-auth)', async t => {
 test('storeScopedToken succeeds without auth', async t => {
   const token = {
     scopes: [],
-    token: {},
+    token: {a: 1},
+  };
+  const encryptedToken = {
+    scopes: [],
+    token: swapCase(JSON.stringify(token.token)),
   };
   const {program, mocks} = getSample();
 
   await program.storeScopedToken(mocks.req, mocks.res, token);
 
   t.true(mocks.res.cookie.calledOnce);
-  t.true(mocks.res.cookie.calledWith('oauth2token', JSON.stringify(token)));
+  t.true(
+    mocks.res.cookie.calledWith('oauth2token', JSON.stringify(encryptedToken), {
+      secure: true,
+    })
+  );
 });
 
 test('getAuthedScopedToken auto-auths', async t => {
   const token = {
     scopes: [],
-    token: {},
+    token: '{}',
   };
   const {program, mocks} = getSample([token], null, Date.now());
 
@@ -348,7 +395,7 @@ test('getAuthedScopedToken auto-auths', async t => {
 test('getAuthedToken auto-auths', async t => {
   const token = {
     scopes: [],
-    token: {},
+    token: '{}',
   };
   const {program, mocks} = getSample([token], null, Date.now());
 
@@ -359,7 +406,7 @@ test('getAuthedToken auto-auths', async t => {
 test('authedUserHasScope fails without auth (and does not auto-auth)', async t => {
   const token = {
     scopes: [],
-    token: {},
+    token: '{}',
   };
   const {program, mocks} = getSample();
 
@@ -372,7 +419,7 @@ test('authedUserHasScope fails without auth (and does not auto-auth)', async t =
 test('getAuthedUserId fails with zero required scopes', async t => {
   const token = {
     scopes: ['not_email'],
-    token: {},
+    token: '{}',
   };
   const userId = uuid4();
   const {program, mocks} = getSample([token], null, userId);
@@ -388,7 +435,7 @@ test('getAuthedUserId fails with zero required scopes', async t => {
 test('getAuthedUserId passes with one required scope', async t => {
   const token = {
     scopes: ['email'],
-    token: {},
+    token: '{}',
   };
   const userId = uuid4();
   const {program, mocks} = getSample([token], null, userId);
@@ -404,7 +451,7 @@ test('getAuthedUserId passes with one required scope', async t => {
 test('getAuthedUserId checks for invalid userId formats', async t => {
   const token = {
     scopes: ['email'],
-    token: {},
+    token: '{}',
   };
   const userId = uuid4();
   const {program, mocks} = getSample([token]);
@@ -422,7 +469,7 @@ test('getAuthedUserId checks for invalid userId formats', async t => {
 test('getAuthedUserId succeeds with valid userId formats', async t => {
   const token = {
     scopes: ['email'],
-    token: {},
+    token: '{}',
   };
   const userId = uuid4();
   const {program, mocks} = getSample([token]);
@@ -438,7 +485,7 @@ test('getAuthedUserId succeeds with valid userId formats', async t => {
 test('authedUserHasScope checks if a user has a given scope', async t => {
   const token = {
     scopes: ['email'],
-    token: {},
+    token: '{}',
   };
   const userId = uuid4();
   const {program, mocks} = getSample([token]);
@@ -464,7 +511,7 @@ test('authedUserHasScope checks if a user has a given scope', async t => {
 test('tryAuth auto-auths and returns true if it succeeds', async t => {
   const token = {
     scopes: [],
-    token: {},
+    token: '{}',
   };
   const {program, mocks} = getSample([token], null, Date.now());
 
@@ -476,7 +523,7 @@ test('tryAuth auto-auths and returns true if it succeeds', async t => {
 test('tryAuth returns true if already authenticated', async t => {
   const token = {
     scopes: [],
-    token: {},
+    token: '{}',
   };
   const {program, mocks} = getSample([token], null, Date.now());
 
@@ -501,7 +548,7 @@ test('tryAuth returns false if auth fails', async t => {
 test('tryAuth auto-auths correctly', async t => {
   const token = {
     scopes: [],
-    token: {},
+    token: '{}',
   };
   const {program, mocks} = getSample([token], null, Date.now());
 
@@ -521,7 +568,7 @@ test('requireAuth throws an error if auth fails', async t => {
 test('should demand (and use) "req" and "res" values in HTTP mode', async t => {
   const token = {
     scopes: ['email'],
-    token: {},
+    token: '{}',
   };
 
   const {program, mocks} = getSample([token], null, null, 'HTTP_TRIGGER');
@@ -541,7 +588,7 @@ test('should demand (and use) "req" and "res" values in HTTP mode', async t => {
 test('should not use "req" and "res" globals in non-HTTP mode', async t => {
   const token = {
     scopes: ['email'],
-    token: {},
+    token: '{}',
   };
 
   const {program} = getSample([token], null, null, 'PUBSUB_TRIGGER');
@@ -553,7 +600,7 @@ test('should not use "req" and "res" globals in non-HTTP mode', async t => {
 test('should not allow cookies in non-HTTP mode', async t => {
   const tokenStr = JSON.stringify({
     scopes: [],
-    token: {},
+    token: '{}',
   });
 
   const {program} = getSample(

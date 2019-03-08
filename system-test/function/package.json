@@ -3,20 +3,26 @@
   "version": "0.0.1",
   "description": "A package that simplifies working with OAuth 2.0 tokens and ExpressJS on GCP",
   "main": "index.js",
+  "engines": {
+    "node": ">=8"
+  },
   "scripts": {
     "lint": "eslint *.js test/*.js",
     "test": "npm run lint && ava test/*.test.js",
-    "wrap": "mkdir -p system-test/lib && cp config.js index.js routes.js tokenStorage.js system-test/lib/"
+    "wrap-gcf": "cp *.js system-test/function/lib/",
+    "wrap-gae": "cp *.js system-test/app/lib/"
   },
   "author": "Ace Nassri (anassri@google.com)",
   "license": "Apache-2.0",
   "dependencies": {
     "@google-cloud/datastore": "^3.1.0",
+    "@google-cloud/kms": "^0.3.0",
     "cookie": "^0.3.1",
     "google-auth-library": "^3.1.0",
     "googleapis": "^37.2.0",
     "nconf": "^0.10.0",
-    "pify": "^4.0.1"
+    "pify": "^4.0.1",
+    "sinon": "^7.2.3"
   },
   "devDependencies": {
     "ava": "^1.2.1",
@@ -26,7 +32,7 @@
     "eslint-plugin-prettier": "^3.0.1",
     "prettier": "^1.16.4",
     "proxyquire": "^2.1.0",
-    "sinon": "^7.2.3",
+    "swap-case": "^1.1.2",
     "uuid": "^3.3.2"
   }
 }

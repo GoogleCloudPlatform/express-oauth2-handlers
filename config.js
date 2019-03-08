@@ -53,12 +53,19 @@ nconf.required([
   'GOOGLE_CALLBACK_URL',
   'TOKEN_STORAGE_METHOD',
   'DEFAULT_SCOPES',
+  'KMS_KEY_RING',
+  'KMS_KEY_NAME',
+  'GCP_PROJECT',
 ]);
 
-/* File/env var values */
+/* Auth values */
 exports.GOOGLE_CLIENT_ID = nconf.get('GOOGLE_CLIENT_ID');
 exports.GOOGLE_CLIENT_SECRET = nconf.get('GOOGLE_CLIENT_SECRET');
 exports.GOOGLE_CALLBACK_URL = nconf.get('GOOGLE_CALLBACK_URL');
+
+/* KMS config */
+exports.KMS_KEY_RING = nconf.get('KMS_KEY_RING');
+exports.KMS_KEY_NAME = nconf.get('KMS_KEY_NAME');
 
 /* Options */
 exports.STORAGE_METHOD = nconf.get('TOKEN_STORAGE_METHOD');
@@ -66,6 +73,7 @@ exports.DEFAULT_SCOPES = nconf.get('DEFAULT_SCOPES').split(','); // Comma-separa
 exports.USER_ID_FORMAT = nconf.get('USER_ID_FORMAT');
 
 /* Computed values */
+exports.GCP_PROJECT = nconf.get('GCP_PROJECT');
 exports.NEEDS_USER_ID = exports.STORAGE_METHOD === 'datastore';
 const __triggerType = process.env.FUNCTION_TRIGGER_TYPE;
 

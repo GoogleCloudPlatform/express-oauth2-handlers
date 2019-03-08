@@ -23,6 +23,9 @@ test.beforeEach(() => {
   process.env.GOOGLE_CLIENT_ID = 'google_client_id';
   process.env.GOOGLE_CLIENT_SECRET = 'google_client_secret';
   process.env.GOOGLE_CALLBACK_URL = 'google_callback_url';
+  process.env.KMS_KEY_RING = 'kms_key_ring';
+  process.env.KMS_KEY_NAME = 'kms_key_name';
+  process.env.GCP_PROJECT = 'gcp_project';
 });
 
 test.serial('processes DEFAULT_SCOPES array as comma-separated string', t => {

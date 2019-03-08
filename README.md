@@ -18,9 +18,19 @@ The following values can be obtained by [generating a new OAuth 2.0 client ID](h
 - **`GOOGLE_CLIENT_SECRET`**
 - **`GOOGLE_CALLBACK_URL`**
 
+The following values are used to encrypt stored OAuth 2.0 tokens, and can be obtained by [creating a Cloud KMS encryption key](https://cloud.google.com/kms/docs/quickstart#key_rings_and_keys):
+- **`KMS_KEY_RING`**
+- **`KMS_KEY_NAME`**
+
+**Note**
+Encrypting stored tokens (especially [refresh tokens](https://security.stackexchange.com/a/88625)) at rest is considered a best practice, and is therefore required in order to use this library. [Cloud KMS](https://cloud.google.com/kms/docs/) is used for encryption and decryption.
+
 ##### Reserved values
-These values are set by [some](https://cloud.google.com/functions/docs/env-var#reserved_keys_key_validation) (but not all) Google Cloud hosting platforms. Do **not** set them yourself or change their values.
+The following value is set by [some](https://cloud.google.com/functions/docs/env-var#reserved_keys_key_validation) (but not all) Google Cloud hosting platforms. Do **not** set it yourself or change its value.
 - **`FUNCTION_TRIGGER_TYPE`**
+
+The following value should be set to your GCP project ID automatically. If it isn't, make sure you do this manually:
+- **`GCP_PROJECT_ID`**
 
 **Note**
 These values (and in particular the `GOOGLE_CLIENT_SECRET` value) should not be stored/committed alongside your codebase. As such, this library does _not_ support specifying these values programmatically.

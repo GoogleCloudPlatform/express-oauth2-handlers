@@ -20,6 +20,7 @@ const {OAuth2Client} = require('google-auth-library');
 const OAuth2Api = require('googleapis').oauth2_v2.Oauth2;
 
 const {__wrapReqRes, __cacheGet, __cacheSet} = require('./miscHelpers');
+const {__kmsEncrypt, __kmsDecrypt} = require('./kmsLib');
 const datastore = new Datastore();
 
 const __getOAuth2Client = (req, res) => {
@@ -40,17 +41,24 @@ const __isScopedToken = scopedToken => {
   return !!scopedToken.scopes && !!scopedToken.token;
 };
 
-const __validateOrRefreshToken = (req, res, scopedToken, userId) => {
-  if (!scopedToken) {
+const __validateOrRefreshToken = async (req, res, encryptedToken, userId) => {
+  if (!encryptedToken) {
     return Promise.reject(new Error(config.ERROR_UNKNOWN_USER));
   }
 
-  if (!__isScopedToken(scopedToken)) {
+  if (!__isScopedToken(encryptedToken)) {
     return Promise.reject(new Error(config.ERROR_SCOPED_ONLY));
   }
 
-  const {token, scopes} = scopedToken;
+  const scopes = encryptedToken.scopes;
+  let token = encryptedToken.token;
   const oauth2client = __getOAuth2Client(req, res);
+
+  // Decrypt token
+  token = await __kmsDecrypt(token);
+  const scopedToken = Object.assign({}, encryptedToken);
+  token = JSON.parse(token);
+  scopedToken.token = token;
 
   if (!token.expiry_date || token.expiry_date < Date.now() + 60000) {
     // Refresh token
@@ -71,7 +79,7 @@ const __validateOrRefreshToken = (req, res, scopedToken, userId) => {
   }
 };
 
-const __storeScopedToken = (req, res, scopedToken, userId) => {
+const __storeScopedToken = async (req, res, scopedToken, userId) => {
   if (config.NEEDS_USER_ID && !userId) {
     return Promise.reject(new Error(config.ERROR_NEEDS_USERID));
   }
@@ -79,15 +87,19 @@ const __storeScopedToken = (req, res, scopedToken, userId) => {
     return Promise.reject(new Error(config.ERROR_SCOPED_ONLY));
   }
 
+  // Encrypt token
+  const encryptedToken = Object.assign({}, scopedToken);
+  encryptedToken.token = await __kmsEncrypt(JSON.stringify(scopedToken.token));
+
   // Store token
   if (config.STORAGE_METHOD === 'datastore') {
     return datastore.save({
       key: datastore.key(['oauth2token', userId]),
-      data: scopedToken,
+      data: encryptedToken,
     });
   } else if (config.STORAGE_METHOD === 'cookie' && config.IS_HTTP) {
     // User ID not required
-    res.cookie('oauth2token', JSON.stringify(scopedToken), {secure: true});
+    res.cookie('oauth2token', JSON.stringify(encryptedToken), {secure: true});
     return Promise.resolve();
   } else {
     return Promise.reject(new Error(config.ERROR_STORAGE_METHOD));
