@@ -20,7 +20,7 @@ const {OAuth2Client} = require('google-auth-library');
 const OAuth2Api = require('googleapis').oauth2_v2.Oauth2;
 
 const {__wrapReqRes, __cacheGet, __cacheSet} = require('./miscHelpers');
-const {__kmsEncrypt, __kmsDecrypt} = require('./kmsLib');
+const cryptoHelpers = require('./cryptoHelpers');
 const datastore = new Datastore();
 
 const __getOAuth2Client = (req, res) => {
@@ -55,7 +55,7 @@ const __validateOrRefreshToken = async (req, res, encryptedToken, userId) => {
   const oauth2client = __getOAuth2Client(req, res);
 
   // Decrypt token
-  token = await __kmsDecrypt(token);
+  token = await cryptoHelpers.decrypt(token);
   const scopedToken = Object.assign({}, encryptedToken);
   token = JSON.parse(token);
   scopedToken.token = token;
@@ -89,7 +89,9 @@ const __storeScopedToken = async (req, res, scopedToken, userId) => {
 
   // Encrypt token
   const encryptedToken = Object.assign({}, scopedToken);
-  encryptedToken.token = await __kmsEncrypt(JSON.stringify(scopedToken.token));
+  encryptedToken.token = await cryptoHelpers.encrypt(
+    JSON.stringify(scopedToken.token)
+  );
 
   // Store token
   if (config.STORAGE_METHOD === 'datastore') {

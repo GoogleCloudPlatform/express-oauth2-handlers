@@ -60,6 +60,7 @@ function getSample(datastoreResult, cookieResult, expiryDate, triggerType) {
     ERROR_HTTP_ONLY: 'error_http_only',
     ERROR_NEEDS_REQ_RES: 'error_needs_req_res',
     IS_HTTP: triggerType.toLowerCase().includes('http'),
+    USES_KMS: true, // don't test tweetnacl here
   };
   configMock.NEEDS_USER_ID = configMock.STORAGE_METHOD === 'datastore';
 
@@ -107,25 +108,18 @@ function getSample(datastoreResult, cookieResult, expiryDate, triggerType) {
     './config': configMock,
   });
 
-  const kmsMock = {
-    KeyManagementServiceClient: sinon.stub().returns({
-      cryptoKeyPath: sinon.stub().returns('key_path'),
-      decrypt: x => [swapCase(x.ciphertext || x.plaintext)],
-      encrypt: x => swapCase(x.ciphertext || x.plaintext),
-    }),
+  // cryptoHelpers has a system test - so treat it as a black box here
+  const cryptoHelpersMock = {
+    decrypt: swapCase,
+    encrypt: swapCase,
   };
-
-  const kmsLibMock = proxyquire('../kmsLib', {
-    '@google-cloud/kms': kmsMock,
-    './config': configMock,
-  });
 
   return {
     program: proxyquire('../tokenStorage', {
       '@google-cloud/datastore': DatastoreMock,
       './config': configMock,
       './miscHelpers': miscHelpersMock,
-      './kmsLib': kmsLibMock,
+      './cryptoHelpers': cryptoHelpersMock,
       'google-auth-library': googleAuthMock,
       process: processMock,
       googleapis: googleapisMock,

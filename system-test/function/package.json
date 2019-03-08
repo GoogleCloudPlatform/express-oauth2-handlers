@@ -9,8 +9,8 @@
   "scripts": {
     "lint": "eslint *.js test/*.js",
     "test": "npm run lint && ava test/*.test.js",
-    "wrap-gcf": "cp *.js system-test/function/lib/",
-    "wrap-gae": "cp *.js system-test/app/lib/"
+    "wrap-gcf": "cp *.js system-test/function/lib/ && cp *.json system-test/function/",
+    "wrap-gae": "cp *.js system-test/app/lib/ && cp *.json system-test/app/"
   },
   "author": "Ace Nassri (anassri@google.com)",
   "license": "Apache-2.0",
@@ -22,7 +22,10 @@
     "googleapis": "^37.2.0",
     "nconf": "^0.10.0",
     "pify": "^4.0.1",
-    "sinon": "^7.2.3"
+    "sha.js": "^2.4.11",
+    "sinon": "^7.2.3",
+    "tweetnacl": "^1.0.1",
+    "tweetnacl-util": "^0.15.0"
   },
   "devDependencies": {
     "ava": "^1.2.1",

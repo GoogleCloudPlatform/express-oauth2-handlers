@@ -18,25 +18,19 @@ The following values can be obtained by [generating a new OAuth 2.0 client ID](h
 - **`GOOGLE_CLIENT_SECRET`**
 - **`GOOGLE_CALLBACK_URL`**
 
-The following values are used to encrypt stored OAuth 2.0 tokens, and can be obtained by [creating a Cloud KMS encryption key](https://cloud.google.com/kms/docs/quickstart#key_rings_and_keys):
-- **`KMS_KEY_RING`**
-- **`KMS_KEY_NAME`**
-
 **Note**
-Encrypting stored tokens (especially [refresh tokens](https://security.stackexchange.com/a/88625)) at rest is considered a best practice, and is therefore required in order to use this library. [Cloud KMS](https://cloud.google.com/kms/docs/) is used for encryption and decryption.
+These values (and in particular the `GOOGLE_CLIENT_SECRET` value) should not be stored/committed alongside your codebase except when deployed to GCP hosting platforms. As such, this library does _not_ support specifying these values programmatically.
 
 ##### Reserved values
-The following value is set by [some](https://cloud.google.com/functions/docs/env-var#reserved_keys_key_validation) (but not all) Google Cloud hosting platforms. Do **not** set it yourself or change its value.
-- **`FUNCTION_TRIGGER_TYPE`**
 
-The following value should be set to your GCP project ID automatically. If it isn't, make sure you do this manually:
-- **`GCP_PROJECT_ID`**
+**`FUNCTION_TRIGGER_TYPE`**
+This value is set by [some](https://cloud.google.com/functions/docs/env-var#reserved_keys_key_validation) (but not all) Google Cloud hosting platforms. Do **not** set it yourself or change its value.
 
-**Note**
-These values (and in particular the `GOOGLE_CLIENT_SECRET` value) should not be stored/committed alongside your codebase. As such, this library does _not_ support specifying these values programmatically.
+**`GCP_PROJECT_ID`**
+This value should be set to your GCP project ID automatically. If it isn't, make sure you do this manually.
 
-##### Optional values
-These values can be specified during either the configuration or [initialization](#initialization) processes. Where values are different between the two, those specified during initialization take precedence.
+##### Optional settings values
+The following values can be specified during either the configuration or [initialization](#initialization) processes. Where values are different between the two, those specified during initialization take precedence.
 
 ###### `TOKEN_STORAGE_METHOD`
 Specify how OAuth 2.0 tokens will be stored. *Must* be one of the following values:
@@ -56,6 +50,17 @@ The format to use for unique User IDs. Two formats are supported:
 - `gaiaId` Google accounts ID numbers
 
 We recommend using `gaiaId` when possible. However, some external platforms require the use of email addresses as unique User IDs. 
+
+##### `TOKEN_ENCRYPTION_KEY`
+Specifies the encryption method and/or key to use when encrypting OAuth 2.0 tokens as follows, from _least secure_ to _most secure_:
+- `undefined` or not specified: use the `GOOGLE_CLIENT_SECRET` value of your OAuth 2.0 configuration as a `tweetnacl` symmetric encryption key
+- any other string: use this value as a `tweetnacl` symmetric encryption key. **This string should be generated using [cryptography-safe](https://crypto.stackexchange.com/a/39188) randomness tools and kept secret.**
+- `KMS` (case insensitive): use [Cloud KMS][kms]
+
+When using `tweetnacl`, the `TOKEN_ENCRYPTION_KEY` value is hashed using `sha256` and truncated to generate the key used in the application.
+
+##### `KMS_KEY_RING` and `KMS_KEY_NAME`
+These values are used to encrypt stored OAuth 2.0 tokens when using [Cloud KMS][kms] (i.e. when [`TOKEN_ENCRYPTION_KEY`](#token_encryption_key) is set to `KMS`), and can be obtained by [creating a Cloud KMS encryption key](https://cloud.google.com/kms/docs/quickstart#key_rings_and_keys).
 
 ## Initialization
 When importing and initializing the library, several different parameters are used.
@@ -90,10 +95,11 @@ Use the following chart to decide which storage method is right for your use cas
 | -------------------------------- | -------- | ------- |
 | Requires user IDs?               | **No**   | Yes |
 | Requires end-user interaction? ^ | Yes      | **No** |
-| Free?                            | **Yes**  | No |
+| Works with free tier? +          | **Yes**  | No |
 | Platform restricted?             | **No**   | Google Cloud only |
 
 _^ When fetching existing tokens_
+_+ [Cloud KMS][kms] can be used for [token encryption](#token_encryption_key), and does **not** have a free tier._
 
 ## Methods
 ##### `auth.tryAuth`
@@ -308,5 +314,6 @@ This is **not** a Google product, official or otherwise.
 Support for this library is **not** guaranteed, and it may be abandoned, deprecated, and/or deleted at any time with or without notice.
 
 ##### Contributing
-Pull requests and issues are very much appreciated. Please read through [`CONTRIBUTING.md`](CONTRIBUTING.md) before submitting your contribution.
-q
+Pull requests and issues are very much appreciated. Please read through [`CONTRIBUTING.md`](CONTRIBUTING.md) before making any contributions.
+
+[kms]: https://cloud.google.com/kms/docs/

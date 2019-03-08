@@ -15,6 +15,9 @@
 
 const nconf = require('nconf');
 const path = require('path');
+const shajs = require('sha.js');
+
+const {decodeBase64} = require('tweetnacl-util');
 
 /* Standard configuration logic */
 nconf
@@ -53,8 +56,6 @@ nconf.required([
   'GOOGLE_CALLBACK_URL',
   'TOKEN_STORAGE_METHOD',
   'DEFAULT_SCOPES',
-  'KMS_KEY_RING',
-  'KMS_KEY_NAME',
   'GCP_PROJECT',
 ]);
 
@@ -63,7 +64,24 @@ exports.GOOGLE_CLIENT_ID = nconf.get('GOOGLE_CLIENT_ID');
 exports.GOOGLE_CLIENT_SECRET = nconf.get('GOOGLE_CLIENT_SECRET');
 exports.GOOGLE_CALLBACK_URL = nconf.get('GOOGLE_CALLBACK_URL');
 
+/* Non-KMS encryption key */
+let tokenKey =
+  nconf.get('TOKEN_ENCRYPTION_KEY') || exports.GOOGLE_CLIENT_SECRET;
+exports.TOKEN_ENCRYPTION_KEY =
+  shajs('sha256')
+    .update(tokenKey)
+    .digest('hex')
+    .slice(0, 43) + '=';
+exports.TOKEN_ENCRYPTION_BYTES = decodeBase64(exports.TOKEN_ENCRYPTION_KEY);
+
 /* KMS config */
+const usesKms = tokenKey.toUpperCase() === 'KMS';
+exports.USES_KMS = usesKms;
+
+if (usesKms) {
+  nconf.required(['KMS_KEY_RING', 'KMS_KEY_NAME']);
+}
+
 exports.KMS_KEY_RING = nconf.get('KMS_KEY_RING');
 exports.KMS_KEY_NAME = nconf.get('KMS_KEY_NAME');
 
@@ -99,3 +117,5 @@ exports.ERROR_HTTP_ONLY =
   'This functionality is only supported when using HTTP(S).';
 exports.ERROR_NEEDS_REQ_RES =
   'Please pass Express\' "req" and "res" objects to this function when using HTTP(S).';
+exports.ERROR_TWEETNACL_DECRYPTION =
+  '"tweetnacl" could not decrypt the provided message.';

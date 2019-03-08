@@ -22,7 +22,10 @@
     "googleapis": "^37.2.0",
     "nconf": "^0.10.0",
     "pify": "^4.0.1",
-    "sinon": "^7.2.3"
+    "sha.js": "^2.4.11",
+    "sinon": "^7.2.3",
+    "tweetnacl": "^1.0.1",
+    "tweetnacl-util": "^0.15.0"
   },
   "devDependencies": {
     "ava": "^1.2.1",
