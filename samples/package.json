@@ -1,0 +1,19 @@
+{
+  "name": "express-oauth2-handlers-samples",
+  "private": true,
+  "license": "Apache-2.0",
+  "author": "Google LLC",
+  "engines": {
+    "node": ">=8"
+  },
+  "files": [
+    "*.js"
+  ],
+  "scripts": {
+    "test": "echo 'no samples yet'"
+  },
+  "dependencies": {
+  },
+  "devDependencies": {
+  }
+}
