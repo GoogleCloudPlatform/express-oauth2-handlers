@@ -1,5 +1,5 @@
 {
-  "name": "express-oauth",
+  "name": "@google-cloud/express-oauth2-handlers",
   "version": "0.0.1",
   "description": "A package that simplifies working with OAuth 2.0 tokens and ExpressJS on GCP",
   "main": "index.js",
