@@ -16,7 +16,7 @@
   "scripts": {
     "lint": "eslint *.js test/*.js",
     "fix": "eslint --fix *.js test/*.js",
-    "test": "npm run lint && ava test/*.test.js",
+    "test": "npm run lint && nyc ava test/*.test.js",
     "wrap-gcf": "cp *.js system-test/function/lib/",
     "wrap-gae": "cp *.js system-test/app/lib/",
     "docs": "echo 'no jsdocs'",
