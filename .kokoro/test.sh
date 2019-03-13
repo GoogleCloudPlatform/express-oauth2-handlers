@@ -20,6 +20,13 @@ export NPM_CONFIG_PREFIX=/home/node/.npm-global
 
 cd $(dirname $0)/..
 
+export GOOGLE_CLIENT_ID=google-client-id
+export GOOGLE_CLIENT_SECRET=google-client-secret
+export GOOGLE_CALLBACK_URL=google-callback-url
+export GCP_PROJECT=gcp-project
+export KMS_KEY_RING=kms-keyring
+export KMS_KEY_NAME=kms-keyname
+
 npm install
 npm test
 ./node_modules/nyc/bin/nyc.js report
