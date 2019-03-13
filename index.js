@@ -27,7 +27,7 @@ module.exports = (storageMethod, scopes, userIdFormat, showInternals) => {
   tokenStorage = require('./tokenStorage');
 
   // Export library methods
-  let exported = {
+  const exported = {
     auth: {
       tryAuth: tokenStorage.tryAuth,
       requireAuth: tokenStorage.requireAuth,

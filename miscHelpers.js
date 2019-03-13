@@ -22,7 +22,7 @@ const stubNeedsReqRes = sinon
   .stub()
   .throws(new Error(config.ERROR_NEEDS_REQ_RES));
 let GLOBAL_REQ = null;
-let GLOBAL_RES = {
+const GLOBAL_RES = {
   cookie: stubNeedsReqRes,
   status: stubNeedsReqRes,
   send: stubNeedsReqRes,

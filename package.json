@@ -1,5 +1,6 @@
 {
   "name": "@google-cloud/express-oauth2-handlers",
+  "repository": "GoogleCloudPlatform/express-oauth2-handlers",
   "version": "0.0.1",
   "description": "A package that simplifies working with OAuth 2.0 tokens and ExpressJS on GCP",
   "main": "index.js",
@@ -8,9 +9,14 @@
   },
   "scripts": {
     "lint": "eslint *.js test/*.js",
+    "fix": "eslint --fix *.js test/*.js",
     "test": "npm run lint && ava test/*.test.js",
     "wrap-gcf": "cp *.js system-test/function/lib/",
-    "wrap-gae": "cp *.js system-test/app/lib/"
+    "wrap-gae": "cp *.js system-test/app/lib/",
+    "docs": "echo 'no jsdocs'",
+    "docs-test": "echo 'no jsdocs'",
+    "system-test": "echo 'no system-test'",
+    "samples-test": "echo 'no samples-test'"
   },
   "author": "Ace Nassri (anassri@google.com)",
   "license": "Apache-2.0",
