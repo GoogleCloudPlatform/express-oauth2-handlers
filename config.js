@@ -65,7 +65,7 @@ exports.GOOGLE_CLIENT_SECRET = nconf.get('GOOGLE_CLIENT_SECRET');
 exports.GOOGLE_CALLBACK_URL = nconf.get('GOOGLE_CALLBACK_URL');
 
 /* Non-KMS encryption key */
-let tokenKey =
+const tokenKey =
   nconf.get('TOKEN_ENCRYPTION_KEY') || exports.GOOGLE_CLIENT_SECRET;
 exports.TOKEN_ENCRYPTION_KEY =
   shajs('sha256')
