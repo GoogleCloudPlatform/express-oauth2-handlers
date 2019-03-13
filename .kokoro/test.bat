@@ -17,6 +17,13 @@
 cd /d %~dp0
 cd ..
 
+SET GOOGLE_CLIENT_ID="google-client-id"
+SET GOOGLE_CLIENT_SECRET="google-client-secret"
+SET GOOGLE_CALLBACK_URL="google-callback-url"
+SET GCP_PROJECT="gcp-project"
+SET KMS_KEY_RING="kms-keyring"
+SET KMS_KEY_NAME="kms-keyname"
+
 call npm install -g npm@latest || goto :error
 call npm install || goto :error
 call npm run test || goto :error
