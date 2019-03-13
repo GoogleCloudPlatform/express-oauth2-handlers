@@ -2,6 +2,8 @@
 
 This library provides pre-built boilerplate code for obtaining and storing OAuth 2.0 tokens on Google Cloud Platform.
 
+![release: alpha](https://img.shields.io/badge/release-alpha-orange.svg "release: alpha")
+
 ## Installation
 ```
 npm install @google-cloud/express-oauth2-handlers
@@ -14,19 +16,19 @@ If a web application client secret file named `client_secret.json` is present in
 
 ##### Required values
 The following values can be obtained by [generating a new OAuth 2.0 client ID](https://console.cloud.google.com/apis/credentials) or reusing an existing one:
-- **`GOOGLE_CLIENT_ID`**
-- **`GOOGLE_CLIENT_SECRET`**
-- **`GOOGLE_CALLBACK_URL`**
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+- `GOOGLE_CALLBACK_URL`
 
 **Note**
 These values (and in particular the `GOOGLE_CLIENT_SECRET` value) should not be stored/committed alongside your codebase except when deployed to GCP hosting platforms. As such, this library does _not_ support specifying these values programmatically.
 
 ##### Reserved values
 
-**`FUNCTION_TRIGGER_TYPE`**
+`FUNCTION_TRIGGER_TYPE`
 This value is set by [some](https://cloud.google.com/functions/docs/env-var#reserved_keys_key_validation) (but not all) Google Cloud hosting platforms. Do **not** set it yourself or change its value.
 
-**`GCP_PROJECT_ID`**
+`GCP_PROJECT_ID`
 This value should be set to your GCP project ID automatically. If it isn't, make sure you do this manually.
 
 ##### Optional settings values
@@ -51,7 +53,7 @@ The format to use for unique User IDs. Two formats are supported:
 
 We recommend using `gaiaId` when possible. However, some external platforms require the use of email addresses as unique User IDs. 
 
-##### `TOKEN_ENCRYPTION_KEY`
+###### `TOKEN_ENCRYPTION_KEY`
 Specifies the encryption method and/or key to use when encrypting OAuth 2.0 tokens as follows, from _least secure_ to _most secure_:
 - `undefined` or not specified: use the `GOOGLE_CLIENT_SECRET` value of your OAuth 2.0 configuration as a `tweetnacl` symmetric encryption key
 - any other string: use this value as a `tweetnacl` symmetric encryption key. **This string should be generated using [cryptography-safe](https://crypto.stackexchange.com/a/39188) randomness tools and kept secret.**
@@ -59,23 +61,23 @@ Specifies the encryption method and/or key to use when encrypting OAuth 2.0 toke
 
 When using `tweetnacl`, the `TOKEN_ENCRYPTION_KEY` value is hashed using `sha256` and truncated to generate the key used in the application.
 
-##### `KMS_KEY_RING` and `KMS_KEY_NAME`
+###### `KMS_KEY_RING` and `KMS_KEY_NAME`
 These values are used to encrypt stored OAuth 2.0 tokens when using [Cloud KMS][kms] (i.e. when [`TOKEN_ENCRYPTION_KEY`](#token_encryption_key) is set to `KMS`), and can be obtained by [creating a Cloud KMS encryption key](https://cloud.google.com/kms/docs/quickstart#key_rings_and_keys).
 
 ## Initialization
 When importing and initializing the library, several different parameters are used.
 
 ###### `storageMethod`
-_Optional._ Specify how OAuth 2.0 tokens will be stored. Identical to (and takes precedence over) [`TOKEN_STORAGE_METHOD`](#token-storage-method) above.
+_Optional._ Specify how OAuth 2.0 tokens will be stored. Identical to (and takes precedence over) [`TOKEN_STORAGE_METHOD`](#token_storage_method) above.
 
 ###### `scopes`
 _Optional._ An array of OAuth 2.0 scopes to request. See [this page](https://developers.google.com/identity/protocols/googlescopes) for a list of OAuth 2.0 scopes supported by Google APIs. Takes precedence over the `DEFAULT_SCOPES` environment variable.
 
 ###### `userIdFormat`
-_Optional._ The format to use for unique User IDs. Identical to (and takes precedence over) [`USER_ID_FORMAT`](#user-id-format) above.
+_Optional._ The format to use for unique User IDs. Identical to (and takes precedence over) [`USER_ID_FORMAT`](#user_id_format) above.
 
 ###### `showInternals`
-_Optional._ If set to `true`, certain [internal methods](#internal-methods) will be exposed.
+_Optional._ If set to `true`, certain internal methods will be exposed.
 
 ##### Example
 ```javascript
@@ -206,7 +208,7 @@ An Express-like request object for HTTP invocations; `null` otherwise.
 An Express-like response object for HTTP invocations; `null` otherwise.
 
 ##### Returns
-A `Promise` containing the current user's Google user ID (`gaiaId`) or email address, depending on the value of [`USER_ID_FORMAT`](#USER-ID-FORMAT).
+A `Promise` containing the current user's Google user ID (`gaiaId`) or email address, depending on the value of [`USER_ID_FORMAT`](#USER_ID_FORMAT).
 
 ##### `auth.storeScopedToken`
 **Internal.** Stores a scoped token associated with the specified user.
