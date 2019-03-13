@@ -7,6 +7,12 @@
   "engines": {
     "node": ">=8"
   },
+  "files": [
+    "src",
+    "AUTHORS",
+    "CONTRIBUTORS",
+    "COPYING"
+  ],
   "scripts": {
     "lint": "eslint *.js test/*.js",
     "fix": "eslint --fix *.js test/*.js",
