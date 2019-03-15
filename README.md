@@ -2,7 +2,7 @@
 
 This library provides pre-built boilerplate code for obtaining and storing OAuth 2.0 tokens on Google Cloud Platform.
 
-![release: alpha](https://img.shields.io/badge/release-alpha-orange.svg "release: alpha")
+![release: alpha](https://img.shields.io/badge/release-alpha-orange.svg "release: alpha") <a href="https://www.npmjs.com/package/@google-cloud/express-oauth2-handlers"><img src="https://img.shields.io/npm/v/@google-cloud/express-oauth2-handlers.svg" alt="npm Version"></a>
 
 ## Installation
 ```
