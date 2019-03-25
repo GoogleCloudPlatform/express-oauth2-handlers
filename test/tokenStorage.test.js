@@ -185,6 +185,7 @@ test('storeScopedToken should encrypt + store token using datastore', async t =>
     {
       key: ['oauth2token', userId],
       data: outputToken,
+      excludeFromIndexes: ['token'],
     },
   ]);
 });
