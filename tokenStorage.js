@@ -98,6 +98,7 @@ const __storeScopedToken = async (req, res, scopedToken, userId) => {
     return datastore.save({
       key: datastore.key(['oauth2token', userId]),
       data: encryptedToken,
+      excludeFromIndexes: ['token'],
     });
   } else if (config.STORAGE_METHOD === 'cookie' && config.IS_HTTP) {
     // User ID not required
