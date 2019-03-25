@@ -8,7 +8,10 @@
     "node": ">=8"
   },
   "files": [
-    "src",
+    "*.js",
+    "!system-test",
+    "!samples",
+    "!test",
     "AUTHORS",
     "CONTRIBUTORS",
     "COPYING"
