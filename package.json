@@ -9,7 +9,9 @@
   },
   "files": [
     "*.js",
-    "src",
+    "!system-test",
+    "!samples",
+    "!test",
     "AUTHORS",
     "CONTRIBUTORS",
     "COPYING"
