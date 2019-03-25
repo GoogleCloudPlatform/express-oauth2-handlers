@@ -8,6 +8,7 @@
     "node": ">=8"
   },
   "files": [
+    "*.js",
     "src",
     "AUTHORS",
     "CONTRIBUTORS",
