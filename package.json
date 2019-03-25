@@ -1,7 +1,7 @@
 {
   "name": "@google-cloud/express-oauth2-handlers",
   "repository": "GoogleCloudPlatform/express-oauth2-handlers",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "A package that simplifies working with OAuth 2.0 tokens and ExpressJS on GCP",
   "main": "index.js",
   "engines": {
