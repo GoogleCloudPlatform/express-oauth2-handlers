@@ -25,10 +25,10 @@ These values (and in particular the `GOOGLE_CLIENT_SECRET` value) should not be 
 
 ##### Reserved values
 
-`FUNCTION_TRIGGER_TYPE`
+##### `FUNCTION_TRIGGER_TYPE`
 This value is set by [some](https://cloud.google.com/functions/docs/env-var#reserved_keys_key_validation) (but not all) Google Cloud hosting platforms. Do **not** set it yourself or change its value.
 
-`GCP_PROJECT_ID`
+##### `GCP_PROJECT_ID`
 This value should be set to your GCP project ID automatically. If it isn't, make sure you do this manually.
 
 ##### Optional settings values
@@ -101,6 +101,7 @@ Use the following chart to decide which storage method is right for your use cas
 | Platform restricted?             | **No**   | Google Cloud only |
 
 _^ When fetching existing tokens_
+
 _+ [Cloud KMS][kms] can be used for [token encryption](#token_encryption_key), and does **not** have a free tier._
 
 ## Methods
