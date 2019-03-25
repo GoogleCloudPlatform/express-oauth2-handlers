@@ -2,3 +2,4 @@ client_secret.json
 node_modules/
 .coverage
 .nyc_output
+.npmrc
