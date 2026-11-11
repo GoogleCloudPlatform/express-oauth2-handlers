@@ -15,7 +15,7 @@
   "author": "Ace Nassri (anassri@google.com)",
   "license": "Apache-2.0",
   "dependencies": {
-    "@google-cloud/datastore": "^3.1.0",
+    "@google-cloud/datastore": "^11.0.0",
     "@google-cloud/kms": "^0.3.0",
     "cookie": "^0.3.1",
     "google-auth-library": "^3.1.0",
